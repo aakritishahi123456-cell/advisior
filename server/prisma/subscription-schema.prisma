@@ -1,0 +1,293 @@
+/**
+ * FinSathi AI - Subscription System Database Schema
+ * Prisma schema for subscription plans and premium features
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Subscription Plans
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String   @unique // Free, Pro, Investor
+  displayName String   // User-friendly name
+  description String?  // Plan description
+  price       Float    // Monthly price in NPR
+  currency    String   @default("NPR")
+  billingCycle String @default("MONTHLY") // MONTHLY, YEARLY
+  features    Json     // Plan features as JSON
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0) // For display order
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+  planFeatures PlanFeature[]
+
+  @@map("subscription_plans")
+}
+
+// Plan Features Mapping
+model PlanFeature {
+  id                String   @id @default(cuid())
+  planId            String   // Related subscription plan
+  featureKey        String   // Feature identifier
+  featureName        String   // User-friendly feature name
+  description        String?  // Feature description
+  isEnabled          Boolean  @default(true)
+  limits            Json?     // Usage limits for the feature
+  createdAt         DateTime @default(now())
+
+  // Relations
+  plan              SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@unique([planId, featureKey])
+  @@map("plan_features")
+}
+
+// User Subscriptions
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   // User who owns the subscription
+  planId            String   // Current subscription plan
+  status            String   // ACTIVE, CANCELLED, EXPIRED, SUSPENDED
+  startDate         DateTime // Subscription start date
+  endDate           DateTime // Subscription end date
+  nextBillingDate    DateTime // Next billing date
+  autoRenew         Boolean  @default(true)
+  paymentMethod      String?  // Payment method identifier
+  lastPaymentAt      DateTime? // Last successful payment
+  cancelledAt        DateTime? // When subscription was cancelled
+  cancellationReason String?  // Reason for cancellation
+  trialEndsAt        DateTime? // Trial period end date
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  user              User     @relation(fields: [userId], references: [id])
+  plan              SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments          Payment[]
+  usage             SubscriptionUsage[]
+  featureAccess     FeatureAccess[]
+
+  @@map("subscriptions")
+}
+
+// Payment Records
+model Payment {
+  id                String   @id @default(cuid())
+  subscriptionId    String   // Related subscription
+  userId            String   // User who made the payment
+  amount            Float    // Payment amount
+  currency          String   @default("NPR")
+  status            String   // PENDING, COMPLETED, FAILED, REFUNDED
+  paymentMethod     String   // Credit card, digital wallet, etc.
+  transactionId     String?  // Payment gateway transaction ID
+  gatewayResponse   Json?    // Full response from payment gateway
+  paidAt            DateTime? // When payment was completed
+  failedAt          DateTime? // When payment failed
+  refundedAt        DateTime? // When payment was refunded
+  refundAmount      Float?   // Amount refunded
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+// Feature Usage Tracking
+model SubscriptionUsage {
+  id            String   @id @default(cuid())
+  subscriptionId String   // Related subscription
+  userId        String   // User who used the feature
+  featureKey    String   // Feature that was used
+  usageCount    Int      @default(0) // Number of times used
+  usageLimit    Int?     // Usage limit for the period
+  periodStart   DateTime // Usage period start
+  periodEnd     DateTime // Usage period end
+  lastUsedAt    DateTime? // Last time feature was used
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  subscription  Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([subscriptionId, featureKey, periodStart])
+  @@map("subscription_usage")
+}
+
+// Feature Access Control
+model FeatureAccess {
+  id            String   @id @default(cuid())
+  subscriptionId String   // Related subscription
+  userId        String   // User who has access
+  featureKey    String   // Feature identifier
+  isGranted     Boolean  @default(true)
+  grantedAt     DateTime @default(now())
+  expiresAt     DateTime? // When access expires
+  lastUsedAt    DateTime? // Last time feature was accessed
+  usageCount    Int      @default(0) // Times feature was used
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  subscription  Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([subscriptionId, userId, featureKey])
+  @@map("feature_access")
+}
+
+// Subscription Add-ons
+model AddOn {
+  id            String   @id @default(cuid())
+  name          String   @unique // Add-on name
+  displayName   String   // User-friendly name
+  description    String?  // Add-on description
+  price         Float    // Add-on price
+  currency      String   @default("NPR")
+  billingCycle  String   @default("MONTHLY")
+  features      Json     // Add-on features
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  userAddOns    UserAddOn[]
+
+  @@map("add_ons")
+}
+
+// User Add-on Subscriptions
+model UserAddOn {
+  id            String   @id @default(cuid())
+  userId        String   // User who purchased add-on
+  addOnId       String   // Related add-on
+  subscriptionId String?  // Related subscription (optional)
+  status        String   // ACTIVE, CANCELLED, EXPIRED
+  startDate     DateTime // Add-on start date
+  endDate       DateTime // Add-on end date
+  nextBillingDate DateTime // Next billing date
+  autoRenew     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user          User     @relation(fields: [userId], references: [id])
+  addOn         AddOn    @relation(fields: [addOnId], references: [id])
+
+  @@map("user_add_ons")
+}
+
+// Subscription Coupons/Discounts
+model Coupon {
+  id            String   @id @default(cuid())
+  code          String   @unique // Discount code
+  name          String   // Coupon name
+  description   String?  // Coupon description
+  discountType  String   // PERCENTAGE, FIXED_AMOUNT
+  discountValue Float    // Discount amount or percentage
+  minAmount     Float?   // Minimum purchase amount
+  maxDiscount   Float?   // Maximum discount amount
+  usageLimit    Int?     // Total usage limit
+  userLimit     Int?     // Per-user usage limit
+  applicablePlans String[] // Plans this coupon applies to
+  startDate     DateTime // Coupon start date
+  endDate       DateTime // Coupon end date
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  couponUsages  CouponUsage[]
+
+  @@map("coupons")
+}
+
+// Coupon Usage Tracking
+model CouponUsage {
+  id            String   @id @default(cuid())
+  couponId      String   // Related coupon
+  userId        String   // User who used the coupon
+  subscriptionId String   // Subscription where coupon was used
+  discountAmount Float    // Discount amount applied
+  originalAmount Float    // Original amount before discount
+  finalAmount   Float    // Final amount after discount
+  usedAt        DateTime @default(now())
+
+  // Relations
+  coupon        Coupon   @relation(fields: [couponId], references: [id])
+
+  @@map("coupon_usages")
+}
+
+// Subscription Events (for audit trail)
+model SubscriptionEvent {
+  id            String   @id @default(cuid())
+  subscriptionId String   // Related subscription
+  userId        String   // User involved
+  eventType     String   // CREATED, UPGRADED, DOWNGRADED, CANCELLED, RENEWED, PAYMENT_FAILED
+  eventData     Json?    // Event-specific data
+  description   String   // Human-readable description
+  ipAddress     String?  // User IP address
+  userAgent     String?  // User agent
+  createdAt     DateTime @default(now())
+
+  @@map("subscription_events")
+}
+
+// Update User model to include subscription relation
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  portfolios  Portfolio[]
+  watchlists  Watchlist[]
+  subscriptions Subscription[]
+  userAddOns  UserAddOn[]
+  couponUsages CouponUsage[]
+
+  @@map("users")
+}
+
+// Feature Definitions (Master list)
+model Feature {
+  id            String   @id @default(cuid())
+  key           String   @unique // Feature identifier
+  name          String   // Feature name
+  description   String?  // Feature description
+  category      String   // AI_ADVISOR, TRADING_SIGNALS, ANALYSIS, PORTFOLIO
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("features")
+}
+
+// Usage Analytics
+model UsageAnalytics {
+  id            String   @id @default(cuid())
+  userId        String   // User who performed the action
+  featureKey    String   // Feature that was used
+  action        String   // Type of action (VIEW, GENERATE, EXPORT, etc.)
+  metadata      Json?    // Additional metadata about the usage
+  ipAddress     String?  // User IP address
+  userAgent     String?  // User agent
+  timestamp     DateTime @default(now())
+
+  @@index([userId, featureKey])
+  @@index([timestamp])
+  @@map("usage_analytics")
+}

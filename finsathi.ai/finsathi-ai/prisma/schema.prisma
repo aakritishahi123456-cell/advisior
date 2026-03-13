@@ -1,0 +1,208 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===============================
+// NEPSE Warehouse (Core)
+// ===============================
+
+model Company {
+  id         String   @id @default(cuid())
+  symbol     String   @unique
+  name       String
+  sector     String?
+  listedYear Int?
+  sharesOutstanding BigInt? @map("shares_outstanding")
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  prices   StockPrice[]
+  reports  FinancialReport[]
+  metrics  FinancialMetric[]
+
+  @@map("companies")
+}
+
+model StockPrice {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  symbol    String
+  date      DateTime
+
+  open      Decimal? @db.Decimal(12, 2)
+  high      Decimal? @db.Decimal(12, 2)
+  low       Decimal? @db.Decimal(12, 2)
+  close     Decimal? @db.Decimal(12, 2)
+  volume    BigInt?
+  source    String   @default("NEPSE")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+  @@map("stock_prices")
+}
+
+model MarketIndexDaily {
+  id           String   @id @default(cuid())
+  indexName    String   @map("index_name")
+  date         DateTime
+  value        Decimal  @db.Decimal(12, 4)
+  change       Decimal? @db.Decimal(12, 4)
+  percentChange Decimal? @map("percent_change") @db.Decimal(12, 4)
+  source       String   @default("NEPSE")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([indexName, date])
+  @@index([indexName])
+  @@index([date])
+  @@map("market_index_daily")
+}
+
+model PriceAnomaly {
+  id          String   @id @default(cuid())
+  symbol      String
+  date        DateTime
+  close       Decimal? @db.Decimal(12, 2)
+  prevClose   Decimal? @map("prev_close") @db.Decimal(12, 2)
+  percentChange Decimal? @map("percent_change") @db.Decimal(12, 4)
+  thresholdPct Decimal  @map("threshold_pct") @db.Decimal(12, 4)
+  reason      String
+  details     Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+  @@map("price_anomalies")
+}
+
+model FinancialReport {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  fiscalYear Int     @map("fiscal_year")
+  period     String? // e.g. "Q1", "FY"
+
+  revenue   Decimal? @db.Decimal(15, 2)
+  netProfit Decimal? @map("net_profit") @db.Decimal(15, 2)
+  totalAssets Decimal? @map("total_assets") @db.Decimal(15, 2)
+  totalEquity Decimal? @map("total_equity") @db.Decimal(15, 2)
+  totalDebt  Decimal? @map("total_debt") @db.Decimal(15, 2)
+
+  source    String   @default("NEPSE")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([fiscalYear])
+  @@index([companyId, fiscalYear])
+  @@map("financial_reports")
+}
+
+model FinancialMetric {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  symbol    String
+  asOfDate  DateTime @map("as_of_date")
+
+  eps           Decimal? @db.Decimal(12, 4)
+  peRatio       Decimal? @map("pe_ratio") @db.Decimal(12, 4)
+  roe           Decimal? @db.Decimal(12, 4)
+  debtRatio     Decimal? @map("debt_ratio") @db.Decimal(12, 4)
+  debtToEquity  Decimal? @map("debt_to_equity") @db.Decimal(12, 4)
+  revenueGrowth Decimal? @map("revenue_growth") @db.Decimal(12, 4)
+
+  isUndervalued Boolean  @default(false) @map("is_undervalued")
+  isHighGrowth  Boolean  @default(false) @map("is_high_growth")
+  isHighRisk    Boolean  @default(false) @map("is_high_risk")
+
+  signals       Json?    // thresholds + rationale for flags
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([symbol, asOfDate])
+  @@index([symbol])
+  @@index([asOfDate])
+  @@map("financial_metrics")
+}
+
+// ===============================
+// AI Insights + Simulation
+// ===============================
+
+model InsightReport {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  summary   String
+  details   Json?
+  model     String?  // LLM model identifier (optional)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("insight_reports")
+}
+
+model BacktestRun {
+  id          String   @id @default(cuid())
+  strategy    String
+  parameters  Json?
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  performance Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([strategy])
+  @@map("backtest_runs")
+}
+
+model PortfolioRecommendation {
+  id           String   @id @default(cuid())
+  riskTolerance String? @map("risk_tolerance")
+  horizonDays   Int?    @map("horizon_days")
+  allocation    Json    // [{symbol, weight, rationale}]
+  metrics       Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("portfolio_recommendations")
+}
+
+// ===============================
+// Agent Pipeline Observability
+// ===============================
+
+model PipelineLog {
+  id           String   @id @default(cuid())
+  pipelineType String   @map("pipeline_type")
+  status       String
+  metrics      Json?
+  details      Json?
+  startedAt    DateTime @default(now()) @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+
+  @@index([pipelineType])
+  @@index([status])
+  @@index([startedAt])
+  @@map("pipeline_logs")
+}

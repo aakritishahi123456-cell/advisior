@@ -1,0 +1,196 @@
+/**
+ * FinSathi AI - Market Data Database Schema
+ * Prisma schema for market data storage
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MarketSnapshot {
+  id              String   @id @default(cuid())
+  date            String   @unique // YYYY-MM-DD format
+  totalCompanies  Int      @default(0)
+  totalVolume     BigInt   @default(0)      // Daily trading volume
+  totalMarketCap  BigInt   @default(0)      // Total market capitalization
+  nepseIndex      Float    @default(0)      // NEPSE index value
+  source          String   @default("api")  // Data source: api, scraping, manual
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  stockPriceHistory StockPriceHistory[]
+
+  @@map("market_snapshots")
+}
+
+model Stock {
+  id           String   @id @default(cuid())
+  symbol       String   @unique // Stock symbol (e.g., NABIL, NICA)
+  name         String   // Full company name
+  price        Float    // Current price
+  change       Float    @default(0)      // Price change
+  changePercent Float   @default(0)      // Percentage change
+  volume       BigInt   @default(0)      // Trading volume
+  marketCap    BigInt   @default(0)      // Market capitalization
+  sector       String?  // Sector classification
+  isActive     Boolean  @default(true)   // Whether stock is actively traded
+  lastUpdated  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  priceHistory StockPriceHistory[]
+  recommendations StockRecommendation[]
+  watchlistEntries WatchlistEntry[]
+
+  @@map("stocks")
+}
+
+model StockPriceHistory {
+  id        String   @id @default(cuid())
+  symbol    String   // Stock symbol
+  price     Float    // Price at date
+  volume    BigInt   @default(0)      // Trading volume
+  marketCap BigInt   @default(0)      // Market capitalization
+  date      String   // YYYY-MM-DD format
+  createdAt DateTime @default(now())
+
+  // Relations
+  marketSnapshot MarketSnapshot @relation(fields: [date], references: [date])
+
+  @@unique([symbol, date])
+  @@map("stock_price_history")
+}
+
+model StockRecommendation {
+  id            String   @id @default(cuid())
+  symbol        String   // Stock symbol
+  recommendation String   // BUY, SELL, HOLD, STRONG_BUY, STRONG_SELL
+  targetPrice   Float?   // Target price
+  confidence    Float    // Confidence score (0-1)
+  reason        String?  // Reason for recommendation
+  riskLevel     String   // LOW, MEDIUM, HIGH
+  expectedReturn Float?  // Expected return percentage
+  timeframe     String?  // Investment timeframe (SHORT, MEDIUM, LONG)
+  source        String   // Source of recommendation (AI, ANALYST, etc.)
+  validUntil    DateTime? // When recommendation expires
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  stock Stock @relation(fields: [symbol], references: [symbol])
+
+  @@map("stock_recommendations")
+}
+
+model WatchlistEntry {
+  id        String   @id @default(cuid())
+  userId    String   // User ID
+  symbol    String   // Stock symbol
+  addedAt   DateTime @default(now())
+  notes     String?  // User notes
+  alertPriceHigh Float? // Alert when price goes above
+  alertPriceLow  Float? // Alert when price goes below
+  isActive  Boolean  @default(true)
+
+  // Relations
+  stock Stock @relation(fields: [symbol], references: [symbol])
+
+  @@unique([userId, symbol])
+  @@map("watchlist_entries")
+}
+
+model MarketNews {
+  id          String   @id @default(cuid())
+  title       String   // News title
+  summary     String?  // News summary
+  content     String?  // Full content
+  url         String?  // Source URL
+  source      String   // News source
+  category    String   // Market, Company, Economy, etc.
+  sentiment   String?  // POSITIVE, NEGATIVE, NEUTRAL
+  relevance   Float?   // Relevance score (0-1)
+  publishedAt DateTime // Publication date
+  createdAt   DateTime @default(now())
+
+  // Relations
+  stockNews   StockNews[]
+
+  @@map("market_news")
+}
+
+model StockNews {
+  id         String   @id @default(cuid())
+  newsId     String   // Reference to MarketNews
+  symbol     String   // Related stock symbol
+  relevance  Float    @default(0) // Relevance to this stock
+  createdAt  DateTime @default(now())
+
+  // Relations
+  news MarketNews @relation(fields: [newsId], references: [id])
+
+  @@unique([newsId, symbol])
+  @@map("stock_news")
+}
+
+model MarketIndicator {
+  id          String   @id @default(cuid())
+  name        String   @unique // Indicator name (e.g., NEPSE_INDEX, SENSEX)
+  value       Float    // Current value
+  change      Float    @default(0)      // Change from previous period
+  changePercent Float  @default(0)      // Percentage change
+  category    String   // INDEX, COMMODITY, CURRENCY, etc.
+  description String?  // Description
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("market_indicators")
+}
+
+model PipelineLog {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  level       String   // INFO, WARNING, ERROR, DEBUG
+  message     String   // Log message
+  data        Json?    // Additional data
+  pipeline    String   @default("market-data") // Pipeline name
+  executionId String?  // Execution batch ID
+
+  @@index([timestamp])
+  @@index([level])
+  @@index([pipeline])
+  @@map("pipeline_logs")
+}
+
+model PipelineExecution {
+  id          String   @id @default(cuid())
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  status      String   // RUNNING, COMPLETED, FAILED
+  recordsProcessed Int @default(0)
+  errors      Json?    // Error details
+  warnings    Json?    // Warning details
+  source      String   // API, SCRAPING, MANUAL
+  duration    Int?     // Execution duration in milliseconds
+  
+  @@map("pipeline_executions")
+}
+
+model MarketDataConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique // Configuration key
+  value       String   // Configuration value
+  description String?  // Description
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("market_data_config")
+}

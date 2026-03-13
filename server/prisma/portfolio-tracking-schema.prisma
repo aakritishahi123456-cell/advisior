@@ -1,0 +1,257 @@
+/**
+ * FinSathi AI - Portfolio Tracking Database Schema
+ * Prisma schema for user portfolio management and performance tracking
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for portfolio ownership
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  portfolios  Portfolio[]
+  watchlists  Watchlist[]
+
+  @@map("users")
+}
+
+// Company/Stock model
+model Company {
+  id          String   @id @default(cuid())
+  symbol      String   @unique // Stock symbol (e.g., NABIL, NICA)
+  name        String   // Full company name
+  sector      String?  // Sector classification
+  industry    String?  // Industry classification
+  description String?  // Company description
+  isActive    Boolean  @default(true) // Whether company is actively traded
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  portfolioAssets PortfolioAsset[]
+  dailyPrices    DailyStockPrice[]
+  watchlistEntries WatchlistEntry[]
+
+  @@map("companies")
+}
+
+// Portfolio model - Main portfolio container
+model Portfolio {
+  id          String   @id @default(cuid())
+  name        String   // Portfolio name (e.g., "My Retirement Portfolio")
+  description String?  // Portfolio description
+  userId      String   // Owner of the portfolio
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  assets      PortfolioAsset[]
+  transactions PortfolioTransaction[]
+  performance  PortfolioPerformance[]
+
+  @@map("portfolios")
+}
+
+// Portfolio Asset model - Individual holdings
+model PortfolioAsset {
+  id            String   @id @default(cuid())
+  portfolioId   String   // Parent portfolio
+  companyId     String   // Company/Stock being held
+  shares        Float    // Number of shares owned
+  purchasePrice Float    // Average purchase price per share
+  purchaseDate  DateTime // Date of first purchase
+  lastUpdated   DateTime @default(now())
+
+  // Calculated fields (updated via triggers or scheduled jobs)
+  currentPrice  Float?   // Current market price
+  currentValue  Float?   // Current value (shares * currentPrice)
+  totalCost     Float    // Total cost (shares * purchasePrice)
+  unrealizedPL  Float?   // Unrealized profit/loss
+  unrealizedPLP Float?   // Unrealized profit/loss percentage
+  realizedPL    Float    @default(0) // Realized profit/loss from sales
+  dividendYield Float?   // Current dividend yield
+
+  // Relations
+  portfolio     Portfolio @relation(fields: [portfolioId], references: [id])
+  company       Company   @relation(fields: [companyId], references: [id])
+  transactions  PortfolioTransaction[]
+
+  @@unique([portfolioId, companyId])
+  @@map("portfolio_assets")
+}
+
+// Portfolio Transaction model - Buy/Sell transactions
+model PortfolioTransaction {
+  id          String   @id @default(cuid())
+  portfolioId String   // Parent portfolio
+  assetId     String   // Related portfolio asset
+  companyId   String   // Company/Stock
+  type        String   // BUY, SELL, DIVIDEND
+  shares      Float    // Number of shares
+  price       Float    // Price per share
+  totalAmount Float    // Total transaction amount (shares * price)
+  fees        Float    @default(0) // Transaction fees
+  date        DateTime // Transaction date
+  notes       String?  // Transaction notes
+  createdAt   DateTime @default(now())
+
+  // Relations
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+  asset       PortfolioAsset @relation(fields: [assetId], references: [id])
+
+  @@map("portfolio_transactions")
+}
+
+// Portfolio Performance model - Historical performance data
+model PortfolioPerformance {
+  id            String   @id @default(cuid())
+  portfolioId   String   // Parent portfolio
+  date          DateTime // Performance date
+  totalValue    Float    // Total portfolio value
+  totalCost     Float    // Total cost basis
+  totalPL       Float    // Total profit/loss
+  totalPLP      Float    // Total profit/loss percentage
+  dayChange     Float    // Daily change in value
+  dayChangeP    Float    // Daily change percentage
+  dividends     Float    @default(0) // Dividends received
+  fees          Float    @default(0) // Total fees paid
+
+  // Performance metrics
+  sharpeRatio   Float?   // Risk-adjusted return
+  maxDrawdown   Float?   // Maximum drawdown
+  volatility     Float?   // Portfolio volatility
+  beta          Float?   // Portfolio beta
+  alpha         Float?   // Portfolio alpha
+
+  // Relations
+  portfolio     Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@unique([portfolioId, date])
+  @@map("portfolio_performance")
+}
+
+// Daily Stock Price model for current price tracking
+model DailyStockPrice {
+  id          String   @id @default(cuid())
+  companyId   String   // Company/Stock
+  date        DateTime // Price date
+  openPrice   Float    // Opening price
+  closePrice  Float    // Closing price
+  highPrice   Float    // Highest price
+  lowPrice    Float    // Lowest price
+  volume      BigInt   // Trading volume
+  createdAt   DateTime @default(now())
+
+  // Relations
+  company     Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, date])
+  @@map("daily_stock_prices")
+}
+
+// Watchlist model for tracking interested stocks
+model Watchlist {
+  id          String   @id @default(cuid())
+  userId      String   // Owner of the watchlist
+  name        String   // Watchlist name
+  description String?  // Watchlist description
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+  entries     WatchlistEntry[]
+
+  @@map("watchlists")
+}
+
+// Watchlist Entry model - Individual watchlist items
+model WatchlistEntry {
+  id          String   @id @default(cuid())
+  watchlistId String   // Parent watchlist
+  companyId   String   // Company/Stock being watched
+  targetPrice Float?   // Target price
+  alertPriceHigh Float? // Alert when price goes above
+  alertPriceLow  Float? // Alert when price goes below
+  notes       String?  // User notes
+  addedAt     DateTime @default(now())
+  isActive    Boolean  @default(true)
+
+  // Relations
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id])
+  company     Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([watchlistId, companyId])
+  @@map("watchlist_entries")
+}
+
+// Portfolio Alerts model for notifications
+model PortfolioAlert {
+  id          String   @id @default(cuid())
+  portfolioId String   // Related portfolio
+  type        String   // PRICE_TARGET, LOSS_LIMIT, DIVIDEND, REBALANCE
+  title       String   // Alert title
+  message     String   // Alert message
+  isRead      Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@map("portfolio_alerts")
+}
+
+// Portfolio Settings model for user preferences
+model PortfolioSettings {
+  id          String   @id @default(cuid())
+  portfolioId String   @unique // Related portfolio
+  rebalanceFrequency String? // DAILY, WEEKLY, MONTHLY, QUARTERLY
+  riskTolerance   String? // CONSERVATIVE, MODERATE, AGGRESSIVE
+  maxPositionSize Float? // Maximum position size as percentage
+  stopLossPercent  Float? // Stop loss percentage
+  takeProfitPercent Float? // Take profit percentage
+  autoRebalance   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@map("portfolio_settings")
+}
+
+// Add alerts relation to Portfolio model
+model Portfolio {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id])
+  assets      PortfolioAsset[]
+  transactions PortfolioTransaction[]
+  performance  PortfolioPerformance[]
+  alerts      PortfolioAlert[]
+  settings    PortfolioSettings?
+
+  @@map("portfolios")
+}

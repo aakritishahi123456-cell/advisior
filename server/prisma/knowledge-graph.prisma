@@ -1,0 +1,461 @@
+/**
+ * FinSathi AI - Financial Knowledge Graph
+ * Database schema for connecting companies, metrics, sectors, and market data
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+// Companies - Central entity in the knowledge graph
+model Company {
+  id            String    @id @default(cuid())
+  symbol        String    @unique
+  name          String
+  description   String?
+  logo          String?
+  website       String?
+  sectorId      String?   @map("sector_id")
+  industryId    String?   @map("industry_id")
+  marketId      String?   @map("market_id")
+  listedYear   Int?      @map("listed_year")
+  listedDate   DateTime? @map("listed_date")
+  faceValue    Float?    @map("face_value") @db.Decimal(10, 2)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  sector        Sector?      @relation(fields: [sectorId], references: [id])
+  industry      Industry?    @relation(fields: [industryId], references: [id])
+  market        Market?      @relation(fields: [marketId], references: [id])
+  financialReports FinancialReport[]
+  stockPrices   StockPrice[]
+  dividends     Dividend[]
+  splits        StockSplit[]
+  peers         CompanyPeer[] @relation("CompanyPeers")
+  peerOf       CompanyPeer[] @relation("CompanyPeerOf")
+  news         CompanyNews[]
+  aiReports    AIReport[]
+  
+  // Indexes
+  @@index([symbol])
+  @@index([sectorId])
+  @@index([industryId])
+  @@index([isActive])
+  @@map("companies")
+}
+
+// ============================================
+// SECTOR & INDUSTRY HIERARCHY
+// ============================================
+
+// Sector - Top-level classification
+model Sector {
+  id          String    @id @default(cuid())
+  code        String    @unique // e.g., "BANKING", "HYDRO", "MUTUAL"
+  name        String
+  description String?
+  icon        String?
+  parentId    String?   @map("parent_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Self-referential for sub-sectors
+  parent      Sector?   @relation("SectorHierarchy", fields: [parentId], references: [id])
+  children    Sector[]  @relation("SectorHierarchy")
+  industries  Industry[]
+  companies   Company[]
+
+  @@index([code])
+  @@index([parentId])
+  @@map("sectors")
+}
+
+// Industry - Sub-sector classification
+model Industry {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  description String?
+  sectorId    String    @map("sector_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  sector      Sector    @relation(fields: [sectorId], references: [id])
+  companies   Company[]
+
+  @@index([sectorId])
+  @@index([code])
+  @@map("industries")
+}
+
+// Market - Trading market
+model Market {
+  id          String    @id @default(cuid())
+  code        String    @unique // e.g., "NEPSE", "NEPAL Stock Exchange"
+  name        String
+  country     String    @default("Nepal")
+  timezone    String    @default("Asia/Kathmandu")
+  currency    String    @default("NPR")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  companies   Company[]
+  marketIndices MarketIndex[]
+
+  @@map("markets")
+}
+
+// ============================================
+// FINANCIAL REPORTING
+// ============================================
+
+// Financial Report - Quarterly/Annual reports
+model FinancialReport {
+  id             String    @id @default(cuid())
+  companyId      String    @map("company_id")
+  reportType     ReportType @map("report_type") // QUARTERLY, ANNUAL
+  fiscalYear     Int       @map("fiscal_year")
+  quarter        Int?      // 1, 2, 3, 4 (null for annual)
+  periodStart    DateTime @map("period_start")
+  periodEnd      DateTime @map("period_end")
+  
+  // Key Financial Metrics
+  revenue        Float?    @db.Decimal(20, 2)
+  costOfGoods    Float?    @map("cost_of_goods") @db.Decimal(20, 2)
+  grossProfit    Float?    @map("gross_profit") @db.Decimal(20, 2)
+  operatingProfit Float?   @map("operating_profit") @db.Decimal(20, 2)
+  netProfit      Float?    @map("net_profit") @db.Decimal(20, 2)
+  eps            Float?    @map("eps") @db.Decimal(10, 4) // Earnings per share
+  
+  // Balance Sheet
+  totalAssets    Float?    @map("total_assets") @db.Decimal(20, 2)
+  totalLiabilities Float?  @map("total_liabilities") @db.Decimal(20, 2)
+  totalEquity    Float?    @map("total_equity") @db.Decimal(20, 2)
+  currentAssets  Float?    @map("current_assets") @db.Decimal(20, 2)
+  currentLiabilities Float? @map("current_liabilities") @db.Decimal(20, 2)
+  
+  // Cash Flow
+  operatingCashFlow Float?  @map("operating_cash_flow") @db.Decimal(20, 2)
+  investingCashFlow Float?  @map("investing_cash_flow") @db.Decimal(20, 2)
+  financingCashFlow Float? @map("financing_cash_flow") @db.Decimal(20, 2)
+  
+  // Ratios (pre-calculated)
+  peRatio        Float?    @map("pe_ratio") @db.Decimal(10, 4)
+  pbRatio        Float?    @map("pb_ratio") @db.Decimal(10, 4)
+  roe            Float?    @map("roe") @db.Decimal(8, 4)
+  roa            Float?    @map("roa") @db.Decimal(8, 4)
+  debtToEquity   Float?    @map("debt_to_equity") @db.Decimal(8, 4)
+  currentRatio   Float?    @map("current_ratio") @db.Decimal(8, 4)
+  
+  publishedDate  DateTime? @map("published_date")
+  auditStatus    AuditStatus @default(UNAUDITED) @map("audit_status")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  aiReports      AIReport[]
+
+  // Indexes
+  @@unique([companyId, fiscalYear, quarter, reportType])
+  @@index([companyId])
+  @@index([fiscalYear])
+  @@index([periodEnd])
+  @@map("financial_reports")
+}
+
+enum ReportType {
+  QUARTERLY
+  ANNUAL
+  INTERIM
+}
+
+enum AuditStatus {
+  UNAUDITED
+  AUDITED
+  REVIEWED
+}
+
+// ============================================
+// STOCK PRICING
+// ============================================
+
+// Stock Price - Daily price data
+model StockPrice {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  date        DateTime
+  
+  // Price Data
+  open        Float     @db.Decimal(12, 2)
+  high        Float     @db.Decimal(12, 2)
+  low         Float     @db.Decimal(12, 2)
+  close       Float     @db.Decimal(12, 2)
+  adjustment  Float?    @map("adjustment") @db.Decimal(12, 2) // Adjusted for splits/dividends
+  
+  // Volume Data
+  volume      Int       @default(0)
+  tradedValue  Float?    @map("traded_value") @db.Decimal(20, 2)
+  
+  // Market Stats
+  marketCap    Float?    @map("market_cap") @db.Decimal(20, 2)
+  peRatio      Float?    @map("pe_ratio") @db.Decimal(10, 4)
+  pbRatio      Float?    @map("pb_ratio") @db.Decimal(10, 4)
+  
+  isIntraday   Boolean   @default(false) @map("is_intraday")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@unique([companyId, date, isIntraday])
+  @@index([companyId])
+  @@index([date])
+  @@map("stock_prices")
+}
+
+// Dividend - Dividend payments
+model Dividend {
+  id            String       @id @default(cuid())
+  companyId     String       @map("company_id")
+  fiscalYear    Int          @map("fiscal_year")
+  dividendType  DividendType @map("dividend_type")
+  announcementDate DateTime @map("announcement_date")
+  recordDate    DateTime?   @map("record_date")
+  paymentDate   DateTime?   @map("payment_date")
+  rate          Float        @db.Decimal(10, 4)
+  percentage    Float?       @map("percentage") // As percentage of face value
+  
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, fiscalYear, dividendType])
+  @@index([companyId])
+  @@map("dividends")
+}
+
+enum DividendType {
+  CASH
+  STOCK
+  BONUS
+  RIGHTS
+}
+
+// Stock Split
+model StockSplit {
+  id            String    @id @default(cuid())
+  companyId     String    @map("company_id")
+  splitRatio    String    @map("split_ratio") // e.g., "1:10"
+  announcementDate DateTime @map("announcement_date")
+  effectiveDate DateTime  @map("effective_date")
+  oldFaceValue  Float?    @map("old_face_value") @db.Decimal(10, 2)
+  newFaceValue  Float?    @map("new_face_value") @db.Decimal(10, 2)
+  
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("stock_splits")
+}
+
+// ============================================
+// MARKET INDICES & TRENDS
+// ============================================
+
+// Market Index - NEPSE index, sector indices
+model MarketIndex {
+  id          String    @id @default(cuid())
+  code        String    @unique // e.g., "NEPSE", "BANKING", "MF"
+  name        String
+  marketId    String    @map("market_id")
+  baseDate    DateTime  @map("base_date")
+  baseValue   Float     @map("base_value") @db.Decimal(12, 2)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  market      Market    @relation(fields: [marketId], references: [id])
+  indexValues IndexValue[]
+
+  @@index([marketId])
+  @@map("market_indices")
+}
+
+// Index Value - Daily index values
+model IndexValue {
+  id          String    @id @default(cuid())
+  indexId     String    @map("index_id")
+  date        DateTime
+  
+  open        Float     @db.Decimal(12, 2)
+  high        Float     @db.Decimal(12, 2)
+  low         Float     @db.Decimal(12, 2)
+  close       Float     @db.Decimal(12, 2)
+  change      Float?    @db.Decimal(10, 4)
+  changePercent Float?  @map("change_percent") @db.Decimal(8, 4)
+  volume      Int?      @default(0)
+  marketCap   Float?    @map("market_cap") @db.Decimal(20, 2)
+  
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  index       MarketIndex @relation(fields: [indexId], references: [id], onDelete: Cascade)
+
+  @@unique([indexId, date])
+  @@index([indexId])
+  @@index([date])
+  @@map("index_values")
+}
+
+// Market Trend - Market analysis
+model MarketTrend {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  trendType   TrendType    @map("trend_type")
+  severity    TrendSeverity @default(NEUTRAL) @map("severity")
+  
+  // Analysis
+  sentiment   Float?       @db.Decimal(5, 4) // -1 to 1
+  confidence  Float?       @db.Decimal(5, 4) // 0 to 1
+  
+  // Related entities
+  sectorId    String?      @map("sector_id")
+  companyId   String?      @map("company_id")
+  indexId     String?      @map("index_id")
+  
+  // Time range
+  startDate   DateTime?    @map("start_date")
+  endDate     DateTime?    @map("end_date")
+  isActive    Boolean      @default(true) @map("is_active")
+  
+  // Metadata
+  source      String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  sector      Sector?      @relation(fields: [sectorId], references: [id])
+  company     Company?     @relation(fields: [companyId], references: [id])
+  index       MarketIndex? @relation(fields: [indexId], references: [id])
+
+  @@index([trendType])
+  @@index([sectorId])
+  @@index([companyId])
+  @@index([isActive])
+  @@map("market_trends")
+}
+
+enum TrendType {
+  SECTOR
+  MARKET
+  COMPANY
+  GLOBAL
+  POLITICAL
+  ECONOMIC
+}
+
+enum TrendSeverity {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+// ============================================
+// COMPANY RELATIONSHIPS
+// ============================================
+
+// Company Peer - Competitors/Group companies
+model CompanyPeer {
+  id          String         @id @default(cuid())
+  companyId   String         @map("company_id")
+  peerId      String         @map("peer_id")
+  relationship PeerType       @default(COMPETITOR)
+  
+  company     Company        @relation("CompanyPeers", fields: [companyId], references: [id], onDelete: Cascade)
+  peer        Company        @relation("CompanyPeerOf", fields: [peerId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, peerId])
+  @@index([companyId])
+  @@index([peerId])
+  @@map("company_peers")
+}
+
+enum PeerType {
+  COMPETITOR
+  SUBSIDIARY
+  PARENT
+  AFFILIATE
+  SIMILAR
+}
+
+// ============================================
+// COMPANY NEWS
+// ============================================
+
+model CompanyNews {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  title       String
+  summary     String?   @db.Text
+  content     String?   @db.Text
+  source      String?
+  url         String?
+  imageUrl    String?   @map("image_url")
+  publishedAt DateTime? @map("published_at")
+  sentiment   Float?    @db.Decimal(5, 4)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([publishedAt])
+  @@map("company_news")
+}
+
+// ============================================
+// AI ANALYSIS
+// ============================================
+
+model AIReport {
+  id             String   @id @default(cuid())
+  companyId      String?  @map("company_id")
+  financialReportId String? @map("financial_report_id")
+  
+  reportType     String   @map("report_type") // RISK, RECOMMENDATION, ANALYSIS
+  title          String
+  summary        String   @db.Text
+  content        String   @db.Text
+  
+  // AI-generated scores
+  riskScore      Float?   @map("risk_score") @db.Decimal(5, 2)
+  sentimentScore Float?   @map("sentiment_score") @db.Decimal(5, 2)
+  confidenceScore Float?  @map("confidence_score") @db.Decimal(5, 2)
+  
+  // Recommendations
+  recommendation String?  @map("recommendation") // BUY, SELL, HOLD
+  
+  year           Int?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  financialReport FinancialReport? @relation(fields: [financialReportId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([reportType])
+  @@index([createdAt])
+  @@map("ai_reports")
+}

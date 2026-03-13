@@ -1,0 +1,533 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  phone        String?  
+  dateOfBirth  DateTime? @map("date_of_birth")
+  role         UserRole @default(FREE)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  loanSimulations LoanSimulation[]
+  subscriptions   Subscription[]
+  userUsage       UserUsage[]
+  apiUsageLogs    ApiUsageLog[]
+  financialReports FinancialReport[]
+  financialProfiles FinancialProfile[]
+
+  @@map("users")
+}
+
+// User Usage tracking table
+model UserUsage {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  month        String   // YYYY-MM format
+  reportCount  Int      @default(0) @map("report_count")
+  requestCount Int      @default(0) @map("request_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month])
+  @@index([userId])
+  @@index([month])
+  @@map("user_usage")
+}
+
+// API Usage Logs table
+model ApiUsageLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  endpoint  String
+  method    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("api_usage_logs")
+}
+
+// Companies table
+model Company {
+  id         String   @id @default(cuid())
+  symbol     String   @unique
+  name       String
+  sector     String
+  listedYear Int      @map("listed_year")
+  listedDate DateTime? @map("listed_date")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  financialReports FinancialReport[]
+  aiReports        AIReport[]
+  nepsePrices      NepsePrice[]
+  nepseFinancials  NepseFinancial[]
+
+  // Indexes
+  @@index([symbol])
+  @@index([sector])
+  @@map("companies")
+}
+
+model NepsePrice {
+  id        String   @id @default(cuid())
+  symbol    String
+  date      DateTime
+  open      Float?   @map("open") @db.Decimal(12, 2)
+  close     Float?   @map("close") @db.Decimal(12, 2)
+  high      Float?   @map("high") @db.Decimal(12, 2)
+  low       Float?   @map("low") @db.Decimal(12, 2)
+  volume    BigInt?  @map("volume")
+  source    String   @default("NEPSE")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+  @@map("prices")
+}
+
+model NepseFinancial {
+  id            String   @id @default(cuid())
+  symbol        String
+  asOfDate      DateTime @map("as_of_date")
+  eps           Float?   @map("eps") @db.Decimal(12, 4)
+  peRatio       Float?   @map("pe_ratio") @db.Decimal(12, 4)
+  marketCap     BigInt?  @map("market_cap")
+  dividendYield Float?   @map("dividend_yield") @db.Decimal(12, 4)
+  source        String   @default("NEPSE")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+
+  @@unique([symbol, asOfDate])
+  @@index([symbol])
+  @@index([asOfDate])
+  @@map("financials")
+}
+
+// Financial Reports table
+model FinancialReport {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  year        Int
+  revenue     Float    @db.Decimal(15, 2)
+  netProfit   Float    @map("net_profit") @db.Decimal(15, 2)
+  totalAssets Float    @map("total_assets") @db.Decimal(15, 2)
+  totalEquity Float    @map("total_equity") @db.Decimal(15, 2)
+  totalDebt   Float    @map("total_debt") @db.Decimal(15, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  aiReports AIReport[]
+
+  // Indexes
+  @@index([companyId])
+  @@index([year])
+  @@index([companyId, year])
+  @@map("financial_reports")
+}
+
+// Loan Simulations table
+model LoanSimulation {
+  id            String   @id @default(cuid())
+  userId        String?  @map("user_id") // Optional for MVP
+  amount        Float    @db.Decimal(15, 2) // Loan principal
+  rate          Float    @db.Decimal(8, 4) // Interest rate (annual percentage)
+  tenure        Int      // Tenure in years
+  emi           Float    @db.Decimal(15, 2) // Equated Monthly Installment
+  totalInterest Float    @map("total_interest") @db.Decimal(15, 2)
+  totalPayment  Float    @map("total_payment") @db.Decimal(15, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Indexes for optimal query performance
+  @@index([userId])                    // For user-specific queries
+  @@index([createdAt])                 // For chronological queries
+  @@index([userId, createdAt])         // For user's simulation history
+  @@index([amount])                    // For amount-based searches
+  @@index([rate])                      // For interest rate analysis
+  @@index([tenure])                    // For tenure-based queries
+  @@index([amount, rate, tenure])      // For exact match queries
+  @@map("loan_simulations")
+}
+
+// AI Reports table
+model AIReport {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  companyId    String?  @map("company_id")
+  financialReportId String? @map("financial_report_id")
+  year         Int?
+  analysisText String   @map("analysis_text") @db.Text
+  riskScore    Float    @map("risk_score") @db.Decimal(5, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  financialReport FinancialReport? @relation(fields: [financialReportId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([year])
+  @@index([companyId, year])
+  @@map("ai_reports")
+}
+
+// Subscriptions table
+model Subscription {
+  id        String            @id @default(cuid())
+  userId    String            @map("user_id")
+  plan      SubscriptionPlan  @default(FREE)
+  status    SubscriptionStatus @default(ACTIVE)
+  startDate DateTime          @default(now()) @map("start_date")
+  endDate   DateTime?         @map("end_date")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+// Enums
+enum UserRole {
+  FREE
+  PRO
+  INVESTOR
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  INVESTOR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+// Financial Profile table
+model FinancialProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @map("user_id")
+  monthlyIncome         Float    @map("monthly_income") @db.Decimal(15, 2)
+  monthlyExpenses      Float    @map("monthly_expenses") @db.Decimal(15, 2)
+  currentSavings       Float    @map("current_savings") @db.Decimal(15, 2)
+  riskTolerance        RiskTolerance @map("risk_tolerance")
+  investmentHorizonYears Int      @map("investment_horizon_years")
+  financialGoal        FinancialGoal @map("financial_goal")
+  targetAmount         Float?   @map("target_amount") @db.Decimal(15, 2)
+  targetDate          DateTime? @map("target_date")
+  monthlyContribution  Float?   @map("monthly_contribution") @db.Decimal(15, 2)
+  emergencyFundMonths  Int?     @map("emergency_fund_months")
+  insuranceCoverage    Boolean? @map("insurance_coverage") @default(false)
+  dependentsCount     Int?     @map("dependents_count")
+  employmentStatus     String?  @map("employment_status")
+  annualIncomeGrowth   Float?   @map("annual_income_growth") @db.Decimal(5, 2)
+  preferredInvestmentTypes String[] @map("preferred_investment_types")
+  investmentExperience  String?  @map("investment_experience")
+  liquidityPreference   String?  @map("liquidity_preference")
+  taxBracket          String?  @map("tax_bracket")
+  lastUpdated         DateTime @updatedAt @map("last_updated")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investmentRecommendations InvestmentRecommendation[]
+  financialGoals FinancialGoalProfile[]
+
+  // Indexes for optimal query performance
+  @@index([userId])                    // Primary user lookup
+  @@index([userId, financialGoal])     // User goal queries
+  @@index([riskTolerance])             // Risk-based filtering
+  @@index([investmentHorizonYears])    // Horizon-based filtering
+  @@index([financialGoal, targetDate])  // Goal-based queries
+  @@index([monthlyIncome])             // Income-based queries
+  @@index([createdAt])                 // Chronological queries
+  @@index([lastUpdated])               // Update tracking
+  @@unique([userId, financialGoal])     // One profile per goal type
+  @@map("financial_profiles")
+}
+
+// Investment Recommendations based on financial profile
+model InvestmentRecommendation {
+  id                   String   @id @default(cuid())
+  financialProfileId    String   @map("financial_profile_id")
+  investmentType        String   @map("investment_type")
+  recommendationText    String   @map("recommendation_text") @db.Text
+  riskLevel            String   @map("risk_level")
+  expectedReturn        Float?   @map("expected_return") @db.Decimal(5, 2)
+  timeHorizon          Int?     @map("time_horizon")
+  minimumInvestment    Float?   @map("minimum_investment") @db.Decimal(15, 2)
+  confidenceScore      Float?   @map("confidence_score") @db.Decimal(3, 2)
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  financialProfile FinancialProfile @relation(fields: [financialProfileId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([financialProfileId])
+  @@index([investmentType])
+  @@index([riskLevel])
+  @@index([isActive])
+  @@map("investment_recommendations")
+}
+
+// Financial Goal Profiles for tracking multiple goals
+model FinancialGoalProfile {
+  id                   String   @id @default(cuid())
+  financialProfileId    String   @map("financial_profile_id")
+  goalType             String   @map("goal_type")
+  goalName             String   @map("goal_name")
+  targetAmount          Float    @map("target_amount") @db.Decimal(15, 2)
+  currentAmount        Float    @map("current_amount") @db.Decimal(15, 2)
+  targetDate           DateTime @map("target_date")
+  monthlyContribution  Float    @map("monthly_contribution") @db.Decimal(15, 2)
+  priority             String   @map("priority")
+  status               String   @map("status")
+  progressPercentage    Float    @map("progress_percentage") @db.Decimal(5, 2)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  financialProfile FinancialProfile @relation(fields: [financialProfileId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([financialProfileId])
+  @@index([goalType])
+  @@index([status])
+  @@index([targetDate])
+  @@index([priority])
+  @@map("financial_goal_profiles")
+}
+
+// Enums for Financial Profile
+enum RiskTolerance {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+enum FinancialGoal {
+  RETIREMENT
+  HOUSE_PURCHASE
+  EDUCATION_FUND
+  WEALTH_GROWTH
+  EMERGENCY_FUND
+  DEBT_PAYOFF
+  VACATION
+  CAR_PURCHASE
+  WEDDING
+  BUSINESS_STARTUP
+  INHERITANCE_PLANNING
+  CHARITY_DONATION
+}
+
+// ============================================
+// AUTO ML MODELS
+// ============================================
+
+// Training Data
+model TrainingData {
+  id          String   @id @default(cuid())
+  symbol      String
+  date        DateTime
+  open        Float    @db.Decimal(12, 2)
+  high        Float    @db.Decimal(12, 2)
+  low         Float    @db.Decimal(12, 2)
+  close       Float    @db.Decimal(12, 2)
+  volume      Int
+  source      String   @default("NEPSE")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([symbol, date])
+  @@index([symbol])
+  @@index([date])
+  @@index([version])
+  @@map("training_data")
+}
+
+// ML Models
+model MLModel {
+  id            String    @id @default(cuid())
+  modelId       String    @unique @map("model_id")
+  name          String
+  algorithm     String
+  parameters    Json?
+  trainingSize  Int       @map("training_size")
+  dataVersion   Int       @map("data_version")
+  status        ModelStatus @default(TRAINED)
+  metrics       Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deployedAt    DateTime? @map("deployed_at")
+
+  @@index([status])
+  @@index([algorithm])
+  @@map("ml_models")
+}
+
+enum ModelStatus {
+  TRAINING
+  TRAINED
+  TESTING
+  PRODUCTION
+  ARCHIVED
+  DELETED
+  FAILED
+}
+
+// Pipeline Execution Logs
+model PipelineLog {
+  id          String   @id @default(cuid())
+  pipelineType String   @map("pipeline_type")
+  status      String
+  metrics     Json?
+  details     Json?
+  startedAt   DateTime @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@index([pipelineType])
+  @@index([status])
+  @@index([startedAt])
+  @@map("pipeline_logs")
+}
+
+// ============================================
+// EXPERIMENT TRACKING
+// ============================================
+
+// ML Experiments
+model MLExperiment {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  type          ExperimentType @default(HYPERPARAMETER)
+  parameters    Json?
+  datasetVersion String?  @map("dataset_version")
+  modelType     String?  @map("model_type")
+  status        ExperimentStatus @default(RUNNING)
+  results       Json?
+  startTime    DateTime  @default(now()) @map("start_time")
+  endTime      DateTime? @map("end_time")
+  
+  metrics       ExperimentMetric[]
+  predictions  PredictionLog[]
+
+  @@index([type])
+  @@index([status])
+  @@index([startTime])
+  @@map("ml_experiments")
+}
+
+enum ExperimentType {
+  HYPERPARAMETER
+  ARCHITECTURE
+  FEATURE_ENGINEERING
+  ENSEMBLE
+}
+
+enum ExperimentStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Experiment Metrics
+model ExperimentMetric {
+  id            String   @id @default(cuid())
+  experimentId  String   @map("experiment_id")
+  epoch         Int?
+  step          Int?
+  metrics       Json
+  timestamp     DateTime @default(now())
+
+  experiment    MLExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId])
+  @@index([timestamp])
+  @@map("experiment_metrics")
+}
+
+// Prediction Logs
+model PredictionLog {
+  id                  String   @id @default(cuid())
+  experimentId        String?  @map("experiment_id")
+  modelId            String?  @map("model_id")
+  symbol             String
+  predictedDirection String?  @map("predicted_direction")
+  actualDirection    String?  @map("actual_direction")
+  predictedPrice    Float?   @map("predicted_price")
+  actualPrice        Float?   @map("actual_price")
+  predictionError    Float?   @map("prediction_error")
+  correct            Boolean
+  predictionTime     DateTime @default(now()) @map("prediction_time")
+  features           Json?
+
+  experiment          MLExperiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+
+  @@index([modelId])
+  @@index([symbol])
+  @@index([predictionTime])
+  @@map("prediction_logs")
+}
+
+// Dataset Versions
+model DatasetVersion {
+  id          String   @id @default(cuid())
+  name        String
+  version     String
+  description String?
+  size        String?
+  recordCount Int?     @map("record_count")
+  features    String[] @default([])
+  source      String?
+  statistics  Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([name, version])
+  @@index([name])
+  @@map("dataset_versions")
+}

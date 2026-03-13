@@ -1,0 +1,46 @@
+/**
+ * FinSathi AI - Daily Stock Prices Schema
+ * Prisma model for storing daily stock price data
+ */
+
+model DailyStockPrice {
+  id          String   @id @default(cuid())
+  companyId   String   // Foreign key to company/stock
+  date        DateTime // Trading date
+  openPrice   Float    // Opening price
+  closePrice  Float    // Closing price
+  highPrice   Float    // Highest price of the day
+  lowPrice    Float    // Lowest price of the day
+  volume      BigInt   // Trading volume for the day
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company     Company  @relation(fields: [companyId], references: [id])
+
+  // Indexes for performance
+  @@index([companyId])
+  @@index([date])
+  @@index([companyId, date]) // Composite index for common queries
+  @@unique([companyId, date]) // Ensure one record per company per day
+  
+  @@map("daily_stock_prices")
+}
+
+// Related Company model for reference
+model Company {
+  id          String   @id @default(cuid())
+  symbol      String   @unique // Stock symbol (e.g., NABIL, NICA)
+  name        String   // Full company name
+  sector      String?  // Sector classification
+  industry    String?  // Industry classification
+  description String?  // Company description
+  isActive    Boolean  @default(true) // Whether company is actively traded
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  dailyPrices DailyStockPrice[]
+
+  @@map("companies")
+}

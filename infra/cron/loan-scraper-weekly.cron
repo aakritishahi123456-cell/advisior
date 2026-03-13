@@ -1,0 +1,13 @@
+# FinSathi AI - Nepal loan products scraper (weekly)
+# Runs every Sunday at 03:15 (server local time).
+#
+# Requirements:
+# - Python deps installed: `pip install -r server/scripts/requirements.txt`
+# - Postgres table created via: `server/prisma/migrations/003_loan_products.sql`
+# - DATABASE_URL available in the environment
+#
+# Example (Linux):
+# 15 3 * * 0 cd /app && /usr/bin/python3 server/scripts/scrape-loan-products.py >> /var/log/finsathi/loan-scraper.log 2>&1
+
+15 3 * * 0 cd /app && /usr/bin/python3 server/scripts/scrape-loan-products.py
+

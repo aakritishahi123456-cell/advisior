@@ -1,0 +1,32 @@
+{
+  "name": "finsathi-nepse-downloader",
+  "version": "1.0.0",
+  "description": "Production-ready NEPSE annual report downloader for FinSathi AI",
+  "main": "download-nepse-reports.js",
+  "scripts": {
+    "start": "node download-nepse-reports.js",
+    "test": "node test-downloader.js",
+    "help": "node download-nepse-reports.js --help"
+  },
+  "keywords": [
+    "nepse",
+    "scraper",
+    "annual-reports",
+    "finsathi",
+    "financial-data"
+  ],
+  "author": "FinSathi AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "fs-extra": "^11.1.1",
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

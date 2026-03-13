@@ -1,0 +1,53 @@
+{
+  "name": "finsathi-market-pipeline",
+  "version": "1.0.0",
+  "description": "Automated NEPSE market data pipeline for FinSathi AI",
+  "main": "src/services/marketDataPipeline.js",
+  "scripts": {
+    "start": "node src/services/marketDataPipeline.js",
+    "dev": "nodemon src/services/marketDataPipeline.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "pipeline:run": "node -e \"require('./src/services/marketDataPipeline.js').runManually()\"",
+    "pipeline:status": "node -e \"require('./src/services/marketDataPipeline.js').getStatus()\"",
+    "pipeline:cleanup": "node -e \"require('./src/services/marketDataPipeline.js').cleanupOldData()\""
+  },
+  "dependencies": {
+    "@prisma/client": "^5.6.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.6.0",
+    "nodemon": "^3.0.1",
+    "jest": "^29.7.0",
+    "eslint": "^8.54.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "nepse",
+    "market-data",
+    "stock-market",
+    "automation",
+    "pipeline",
+    "nepal",
+    "fintech"
+  ],
+  "author": "FinSathi AI Team",
+  "license": "MIT"
+}

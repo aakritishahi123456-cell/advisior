@@ -1,0 +1,21 @@
+const { logger } = require('../config/logger');
+
+function requestLogger(req, res, next) {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    logger.info(
+      {
+        method: req.method,
+        path: req.originalUrl,
+        status: res.statusCode,
+        ms,
+      },
+      'request'
+    );
+  });
+  next();
+}
+
+module.exports = { requestLogger };
+
