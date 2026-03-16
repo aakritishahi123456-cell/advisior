@@ -16,6 +16,11 @@ services:
       - ./infra/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - finsathi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finsathi_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis Cache
   redis:
@@ -27,6 +32,30 @@ services:
       - redis_data:/data
     networks:
       - finsathi-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: finsathi-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - finsathi-network
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Backend Server
   server:
@@ -40,12 +69,15 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      CHROMA_URL: http://chromadb:8000
       PORT: 3001
     ports:
       - "3001:3001"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./server:/app
       - /app/node_modules
@@ -90,6 +122,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  chroma_data:
 
 networks:
   finsathi-network:

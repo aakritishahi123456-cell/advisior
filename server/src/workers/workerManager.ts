@@ -3,6 +3,8 @@ import reportParserProcessor from './report-parser.worker';
 import aiReportProcessor from './ai-report.worker';
 import nepseCollectorProcessor from './nepse-collector.worker';
 import loanProductsScraperProcessor from './loan-products-scraper.worker';
+import fundamentalsWorkerProcessor from './fundamentals.worker';
+import portfolioRecalculationWorker from './portfolio.worker';
 import logger from '../utils/logger';
 
 export class WorkerManager {
@@ -42,6 +44,23 @@ export class WorkerManager {
         loanProductsQueue.process(1, loanProductsScraperProcessor);
         this.workers.set(QUEUE_NAMES.LOAN_PRODUCTS_SCRAPER, loanProductsQueue);
         logger.info('Loan products scraper worker initialized');
+      }
+
+      // Initialize fundamentals pipeline worker
+      const fundamentalsQueue = queueManager.getQueue(QUEUE_NAMES.FUNDAMENTALS_SCRAPING);
+      if (fundamentalsQueue) {
+        // Keeping concurrency to 2 config mapped logic from the settings dictionary
+        fundamentalsQueue.process(2, fundamentalsWorkerProcessor);
+        this.workers.set(QUEUE_NAMES.FUNDAMENTALS_SCRAPING, fundamentalsQueue);
+        logger.info('Fundamentals scraping pipeline worker initialized');
+      }
+
+      // Initialize Quantitative Portfolio Optimization Engine
+      const portfolioQueue = queueManager.getQueue(QUEUE_NAMES.PORTFOLIO_RECALCULATION);
+      if (portfolioQueue) {
+         portfolioQueue.process(5, portfolioRecalculationWorker); // Higher concurrency for non-http mathematical bounding
+         this.workers.set(QUEUE_NAMES.PORTFOLIO_RECALCULATION, portfolioQueue);
+         logger.info('Portfolio Recalculation worker mapped successfully');
       }
 
       logger.info('Worker manager initialized successfully');

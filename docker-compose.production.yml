@@ -37,6 +37,26 @@ services:
       timeout: 3s
       retries: 3
 
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: finsathi-chromadb
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - finsathi-network
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Backend API Server
   server:
     build:
@@ -50,6 +70,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${DB_USER:-finsathi}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-finsathi}
       - REDIS_URL=redis://redis:6379
+      - CHROMA_URL=http://chromadb:8000
       - JWT_SECRET=${JWT_SECRET}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - KHALTI_SECRET_KEY=${KHALTI_SECRET_KEY}
@@ -58,6 +79,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      chromadb:
         condition: service_healthy
     networks:
       - finsathi-network
@@ -158,6 +181,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  chroma_data:
   prometheus_data:
   grafana_data:
 

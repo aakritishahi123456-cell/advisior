@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 
@@ -13,10 +15,58 @@ const FinancialChatAgent = require('./financialChatAgent');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security: Helmet HTTP headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || (NODE_ENV === 'production' ? false : '*'),
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
+
+// Rate limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 uploads per minute
+  message: { error: 'Too many upload requests, please try again later.' },
+});
+
+app.use(generalLimiter);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        success: true,
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: NODE_ENV
+    });
+});
 
 // Setup storage for uploaded PDFs
 const uploadDir = path.join(__dirname, 'nepal_stock_reports');
@@ -35,17 +85,25 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // API Endpoint to Upload a Report
-app.post('/api/upload', upload.single('report'), (req, res) => {
+app.post('/api/upload', uploadLimiter, upload.single('report'), (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'Please upload a PDF file.' });
         }
+        
+        // Validate file type
+        if (req.file.mimetype !== 'application/pdf') {
+            return res.status(400).json({ error: 'Only PDF files are allowed.' });
+        }
+        
         res.status(200).json({
             message: 'File uploaded successfully',
-            filename: req.file.filename
+            filename: req.file.filename,
+            size: req.file.size
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Upload error:', error);
+        res.status(500).json({ error: 'Failed to upload file.' });
     }
 });
 
@@ -139,8 +197,57 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Start Server
-app.listen(PORT, () => {
+// Start Server with error handling
+const server = app.listen(PORT, () => {
     console.log(`FinSathi AI backend is running on http://localhost:${PORT}`);
+    console.log(`Environment: ${NODE_ENV}`);
     console.log(`OpenAI API Key is ${process.env.OPENAI_API_KEY ? 'configured' : 'MISSING!'}`);
+});
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ 
+        error: NODE_ENV === 'production' ? 'Internal server error' : err.message 
+    });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Graceful shutdown
+const gracefulShutdown = async (signal) => {
+    console.log(`\n${signal} received. Starting graceful shutdown...`);
+    
+    server.close(async () => {
+        console.log('HTTP server closed.');
+        
+        // Close database connections if any
+        // await prisma.$disconnect();
+        
+        console.log('Graceful shutdown complete.');
+        process.exit(0);
+    });
+    
+    // Force exit after 30 seconds
+    setTimeout(() => {
+        console.error('Forced shutdown after timeout.');
+        process.exit(1);
+    }, 30000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
 });

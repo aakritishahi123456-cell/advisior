@@ -11,7 +11,12 @@ export const QUEUE_NAMES = {
   EMAIL_SENDING: 'email-sending',
   DATA_SYNC: 'data-sync',
   NEPSE_COLLECTOR: 'nepse-collector',
-  LOAN_PRODUCTS_SCRAPER: 'loan-products-scraper'
+  LOAN_PRODUCTS_SCRAPER: 'loan-products-scraper',
+  STOCK_PRICE_UPDATES: 'stock-price-updates',
+  FUNDAMENTALS_SCRAPING: 'fundamentals-scraping',
+  NEWS_INGESTION: 'news-ingestion',
+  SENTIMENT_ANALYSIS: 'sentiment-analysis',
+  PORTFOLIO_RECALCULATION: 'portfolio-recalculation'
 } as const;
 
 // Job types
@@ -135,6 +140,26 @@ const queueConfigs = {
     settings: {
       maxConcurrency: 1,
     }
+  },
+  [QUEUE_NAMES.STOCK_PRICE_UPDATES]: {
+    defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100 },
+    settings: { maxConcurrency: 5 }
+  },
+  [QUEUE_NAMES.FUNDAMENTALS_SCRAPING]: {
+    defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 10000 }, removeOnComplete: 50 },
+    settings: { maxConcurrency: 2 } // Keep low to avoid hitting rate limits on official sites
+  },
+  [QUEUE_NAMES.NEWS_INGESTION]: {
+    defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 200 },
+    settings: { maxConcurrency: 3 }
+  },
+  [QUEUE_NAMES.SENTIMENT_ANALYSIS]: {
+    defaultJobOptions: { attempts: 5, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: 200 },
+    settings: { maxConcurrency: 10 } // High scale capable NLP inferences
+  },
+  [QUEUE_NAMES.PORTFOLIO_RECALCULATION]: {
+    defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 100 },
+    settings: { maxConcurrency: 5 }
   }
 };
 

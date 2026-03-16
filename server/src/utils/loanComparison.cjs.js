@@ -37,8 +37,16 @@ function compareLoans(loanOptions, options = {}) {
 
   // Calculate metrics for each loan
   const calculatedLoans = loanOptions.map((loan, index) => {
-    if (!loan.loanAmount || !loan.interestRate || !loan.tenureYears) {
+    if (!loan.loanAmount || loan.interestRate === undefined || loan.interestRate === null || !loan.tenureYears) {
       throw new Error(`Loan option ${index + 1} is missing required fields`);
+    }
+
+    if (typeof loan.loanAmount !== 'number' || isNaN(loan.loanAmount)) {
+      throw new Error(`Loan option ${index + 1} has invalid loanAmount`);
+    }
+
+    if (typeof loan.interestRate !== 'number' || isNaN(loan.interestRate)) {
+      throw new Error(`Loan option ${index + 1} has invalid interestRate`);
     }
 
     if (loan.loanAmount <= 0) {
@@ -65,7 +73,7 @@ function compareLoans(loanOptions, options = {}) {
             (Math.pow(1 + monthlyRate, totalMonths) - 1);
     }
 
-    const totalPayment = emi * totalMonths;
+    const totalPayment = emi * totalMonths + (loan.processingFee || 0);
     const totalInterest = totalPayment - loan.loanAmount;
     const effectiveAmount = loan.loanAmount - (loan.downPayment || 0);
     const effectiveRate = (totalInterest / effectiveAmount / loan.tenureYears) * 100;
@@ -128,7 +136,7 @@ function compareLoans(loanOptions, options = {}) {
 }
 
 /**
- * Quick comparison for 2-3 loans
+ * Quick comparison - throws for empty array, no recommendations in result
  */
 function quickCompare(loanOptions) {
   if (!Array.isArray(loanOptions)) {
@@ -143,7 +151,10 @@ function quickCompare(loanOptions) {
     throw new Error('Maximum 3 loan options can be compared at once');
   }
 
-  return compareLoans(loanOptions, { sortBy: 'TOTAL_PAYMENT' });
+  const result = compareLoans(loanOptions, { sortBy: 'TOTAL_PAYMENT' });
+  // Quick compare does not include recommendations
+  const { recommendations, ...rest } = result;
+  return rest;
 }
 
 /**
@@ -191,6 +202,8 @@ function calculateComparisonMatrix(loanOptions) {
       
       let better;
       if (i === j) {
+        better = 'equal';
+      } else if (Math.abs(loan.totalPayment - otherLoan.totalPayment) < 0.01) {
         better = 'equal';
       } else if (loan.totalPayment < otherLoan.totalPayment) {
         better = 'loan1';
@@ -276,43 +289,31 @@ function generateComparisonSummary(loanOptions) {
   };
 }
 
-/**
- * Export comparison to CSV
- */
 function exportComparisonToCSV(loanOptions) {
   if (!Array.isArray(loanOptions)) {
     throw new Error('Loan options must be an array');
   }
 
+  const headers = [
+    'Rank', 'Bank', 'Loan Type', 'Amount', 'Rate', 'Tenure',
+    'EMI', 'Total Interest', 'Total Payment', 'Effective Rate',
+    'Interest Ratio', 'Monthly Rate', 'Total Months', 'Description',
+  ];
+
   if (loanOptions.length === 0) {
-    return 'Rank,Bank,Loan Type,Amount,Rate,Tenure,EMI,Total Interest,Total Payment,Effective Rate\n';
+    return headers.join(',');
   }
 
   const comparison = compareLoans(loanOptions);
-  
-  const headers = [
-    'Rank',
-    'Bank',
-    'Loan Type',
-    'Amount',
-    'Rate',
-    'Tenure',
-    'EMI',
-    'Total Interest',
-    'Total Payment',
-    'Effective Rate',
-    'Interest Ratio',
-    'Monthly Rate',
-    'Total Months',
-  ];
 
   const csvRows = [headers.join(',')];
 
-  comparison.loans.forEach(loan => {
+  comparison.loans.forEach((loan, index) => {
+    const description = loan.description || `Loan ${index + 1}`;
     const row = [
       loan.rank || '',
-      `"${loan.bank || 'Unknown'}"`,
-      `"${loan.loanType || 'Personal'}"`,
+      loan.bank || 'Unknown',
+      loan.loanType || 'Personal',
       loan.loanAmount || 0,
       loan.interestRate || 0,
       loan.tenureYears || 0,
@@ -323,8 +324,8 @@ function exportComparisonToCSV(loanOptions) {
       loan.interestToPrincipalRatio || 0,
       loan.monthlyRate || 0,
       loan.totalMonths || 0,
+      `"${description}"`,
     ];
-
     csvRows.push(row.join(','));
   });
 
@@ -445,6 +446,10 @@ function generateRecommendations(loans, analysis) {
 function generateInsights(loans, summary) {
   const insights = [];
 
+  if (summary.totalSavings > 0) {
+    insights.push(`Potential savings of ${summary.totalSavings} available between loan options`);
+  }
+
   if (summary.totalSavings > 50000) {
     insights.push('Significant savings potential exists between loan options');
   }
@@ -453,9 +458,12 @@ function generateInsights(loans, summary) {
     insights.push('Multiple loan options available - consider negotiating rates');
   }
 
-  const avgRate = summary.averageInterest;
-  if (avgRate > 15) {
-    insights.push('Average interest rates are high - consider improving credit score');
+  if (loans.length >= 2) {
+    insights.push('Compare all options carefully before making a decision');
+  }
+
+  if (insights.length === 0) {
+    insights.push('Review loan terms carefully before proceeding');
   }
 
   return insights;
