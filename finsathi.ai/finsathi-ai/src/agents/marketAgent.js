@@ -1,5 +1,7 @@
 const { NepseService } = require('../services/nepseService');
 const { getPrisma } = require('../database/prismaClient');
+const { enqueueAnalysis } = require('../queue/enqueue');
+const { PortfolioService } = require('../services/portfolioService');
 
 class MarketAgent {
   constructor({ logger } = {}) {
@@ -33,6 +35,26 @@ class MarketAgent {
       log?.info?.({ agent: this.name, pipelineId: pipeline.id }, 'Market agent started');
 
       const result = await this.nepse.collectAndStoreDailyData();
+
+      // Optional: recompute portfolio recommendations after market data update.
+      // - If QUEUE_ENABLED=true, enqueue analysis job so workers handle it async.
+      // - Otherwise compute inline (stores to PortfolioRecommendation by default).
+      if (process.env.PORTFOLIO_RECOMPUTE_ON_MARKET_UPDATE === 'true') {
+        try {
+          if (process.env.QUEUE_ENABLED === 'true') {
+            await enqueueAnalysis({ agentKey: 'portfolio' });
+            log?.info?.({ agent: this.name }, 'Enqueued portfolio recompute');
+          } else {
+            await PortfolioService.recommend({
+              riskTolerance: process.env.PORTFOLIO_RISK_TOLERANCE || 'moderate',
+              horizonDays: Number(process.env.PORTFOLIO_HORIZON_DAYS || 180),
+            });
+            log?.info?.({ agent: this.name }, 'Portfolio recompute completed');
+          }
+        } catch (e) {
+          log?.warn?.({ agent: this.name, err: e?.message }, 'Portfolio recompute failed');
+        }
+      }
 
       await prisma.pipelineLog.update({
         where: { id: pipeline.id },

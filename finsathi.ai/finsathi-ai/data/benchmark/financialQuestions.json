@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-13T00:00:00.000Z",
+  "notes": [
+    "This dataset is designed for automated benchmarking. Some questions include an optional `expected.numeric.dbPath` so the runner can score numeric accuracy using your Postgres data (Prisma).",
+    "For document-only RAG, set up official documents, run `docs:collect` + `docs:index`, then run the benchmark so citations can be verified against retrieved context."
+  ],
+  "questions": [
+    {
+      "id": "Q0001",
+      "symbol": "NABIL",
+      "question": "From the official documents, what is the Return on Equity (ROE) for NABIL? Provide the ROE value and cite the page.",
+      "requireCitations": true,
+      "expected": { "numeric": { "dbPath": "companyFundamentals.roe", "tolerancePct": 0.05 } },
+      "tags": ["roe", "document", "numeric"]
+    },
+    {
+      "id": "Q0002",
+      "symbol": "NABIL",
+      "question": "What is the Earnings Per Share (EPS) for NABIL based on the official annual/quarterly report? Provide the EPS and cite the page.",
+      "requireCitations": true,
+      "expected": { "numeric": { "dbPath": "companyFundamentals.eps", "tolerancePct": 0.05 } },
+      "tags": ["eps", "document", "numeric"]
+    },
+    {
+      "id": "Q0003",
+      "symbol": "NABIL",
+      "question": "What was NABIL's net profit in the latest official report available? Provide the figure and cite the page.",
+      "requireCitations": true,
+      "expected": { "numeric": { "dbPath": "companyFundamentals.netProfit", "tolerancePct": 0.1 } },
+      "tags": ["net_profit", "document", "numeric"]
+    },
+    {
+      "id": "Q0004",
+      "symbol": "NABIL",
+      "question": "Summarize the key risk factors mentioned for NABIL in the official document set. Provide at least 2 citations (document + page).",
+      "requireCitations": true,
+      "expected": {},
+      "tags": ["risks", "document", "reasoning"]
+    },
+    {
+      "id": "Q0005",
+      "symbol": "NABIL",
+      "question": "What does the official document say about NABIL's revenue trend? Answer strictly from the document and cite the page(s).",
+      "requireCitations": true,
+      "expected": {},
+      "tags": ["revenue", "document", "reasoning"]
+    }
+  ]
+}
+

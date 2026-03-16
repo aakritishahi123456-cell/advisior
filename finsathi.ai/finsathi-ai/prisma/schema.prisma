@@ -10,7 +10,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ===============================
@@ -31,8 +30,33 @@ model Company {
   prices   StockPrice[]
   reports  FinancialReport[]
   metrics  FinancialMetric[]
+  fundamentals CompanyFundamentals?
+  corporateActions CorporateAction[]
+  newsSentiments NewsSentiment[]
 
   @@map("companies")
+}
+
+enum CorporateActionType {
+  DIVIDEND
+  BONUS_SHARES
+  RIGHTS_SHARES
+  STOCK_SPLIT
+  MERGER
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum OfficialDocumentType {
+  ANNUAL_REPORT
+  QUARTERLY_REPORT
+  INVESTOR_PRESENTATION
+  FINANCIAL_DISCLOSURE
+  OTHER
 }
 
 model StockPrice {
@@ -144,6 +168,223 @@ model FinancialMetric {
   @@index([symbol])
   @@index([asOfDate])
   @@map("financial_metrics")
+}
+
+model CompanyFundamentals {
+  symbol String @id
+
+  companyName  String?  @map("company_name")
+  sector        String?
+  eps           Decimal? @db.Decimal(12, 4)
+  peRatio       Decimal? @map("pe_ratio") @db.Decimal(12, 4)
+  bookValue     Decimal? @map("book_value") @db.Decimal(12, 4)
+  roe           Decimal? @db.Decimal(12, 4)
+  netProfit     Decimal? @map("net_profit") @db.Decimal(20, 2)
+  revenue       Decimal? @db.Decimal(20, 2)
+  dividendYield Decimal? @map("dividend_yield") @db.Decimal(12, 4)
+  marketCap     Decimal? @map("market_cap") @db.Decimal(24, 2)
+
+  lastUpdated DateTime @updatedAt @map("last_updated")
+
+  company Company @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+
+  @@map("company_fundamentals")
+}
+
+model CorporateAction {
+  id     String @id @default(cuid())
+  symbol String
+
+  actionType CorporateActionType @map("action_type")
+
+  announcementDate DateTime  @map("announcement_date")
+  recordDate       DateTime? @map("record_date")
+  paymentDate      DateTime? @map("payment_date")
+
+  dividendPercentage Decimal? @map("dividend_percentage") @db.Decimal(12, 4)
+  bonusPercentage    Decimal? @map("bonus_percentage") @db.Decimal(12, 4)
+  rightsRatio        String?  @map("rights_ratio")
+
+  description String?
+
+  source    String? @default("SCRAPER")
+  sourceUrl String? @map("source_url")
+  raw       Json?
+
+  // Stable key derived from normalized payload to prevent duplicates across sources/runs.
+  dedupeKey String @unique @map("dedupe_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+
+  @@index([symbol])
+  @@index([announcementDate])
+  @@index([actionType])
+  @@map("corporate_actions")
+}
+
+model NewsArticle {
+  id String @id @default(cuid())
+
+  title  String
+  source String
+  url    String @unique
+
+  publishedAt DateTime @map("published_at")
+  content     String?  @db.Text
+
+  raw Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sentiments NewsSentiment[]
+
+  @@index([publishedAt])
+  @@index([source])
+  @@map("news_articles")
+}
+
+model NewsSentiment {
+  id String @id @default(cuid())
+
+  symbol    String
+  articleId String @map("article_id")
+
+  sentimentScore Decimal @map("sentiment_score") @db.Decimal(6, 4)
+  sentimentLabel SentimentLabel @map("sentiment_label")
+  confidenceScore Decimal? @map("confidence_score") @db.Decimal(6, 4)
+
+  model String?
+  raw   Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company     @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+  article NewsArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([symbol, articleId])
+  @@index([symbol])
+  @@index([articleId])
+  @@index([sentimentLabel])
+  @@map("news_sentiments")
+}
+
+model OfficialDocument {
+  id String @id @default(cuid())
+
+  symbol String
+  docType OfficialDocumentType @map("doc_type")
+
+  title String
+  source String? // e.g. "NEPSE", "Company Website"
+  sourceUrl String? @unique @map("source_url")
+
+  localPath String @map("local_path")
+  sha256    String @unique
+
+  publishedAt DateTime? @map("published_at")
+  collectedAt DateTime @default(now()) @map("collected_at")
+
+  isOfficial Boolean @default(true) @map("is_official")
+  raw Json?
+
+  company Company @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+  chunks  OfficialDocumentChunk[]
+
+  @@index([symbol])
+  @@index([docType])
+  @@index([publishedAt])
+  @@map("official_documents")
+}
+
+model OfficialDocumentChunk {
+  id String @id @default(cuid())
+
+  documentId String @map("document_id")
+  chunkIndex Int    @map("chunk_index")
+  pageNumber Int    @map("page_number")
+
+  text String @db.Text
+  snippet String? @db.Text
+  embedding Json
+  embeddingModel String? @map("embedding_model")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  document OfficialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([documentId])
+  @@index([pageNumber])
+  @@map("official_document_chunks")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id String @id @default(cuid())
+
+  email        String @unique
+  passwordHash String @map("password_hash")
+  role         UserRole @default(USER)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+  authEvents    AuthEvent[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  tokenHash String @unique @map("token_hash")
+
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  replacedByTokenId String? @map("replaced_by_token_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  createdByIp String? @map("created_by_ip")
+  createdByUserAgent String? @map("created_by_user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model AuthEvent {
+  id String @id @default(cuid())
+
+  userId String? @map("user_id")
+  eventType String @map("event_type") // LOGIN_SUCCESS, LOGIN_FAIL, REFRESH_SUCCESS, REFRESH_FAIL, LOGOUT
+  success Boolean @default(false)
+
+  ip String?
+  userAgent String? @map("user_agent")
+  email String?
+  details Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("auth_events")
 }
 
 // ===============================

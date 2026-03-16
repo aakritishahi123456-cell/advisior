@@ -1,0 +1,123 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: finsathi-postgres
+    environment:
+      POSTGRES_DB: finsathi
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - finsathi_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d finsathi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: finsathi-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+    container_name: finsathi-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 5050
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/finsathi
+      REDIS_URL: redis://redis:6379
+      MIGRATE_ON_START: "true"
+      QUEUE_ENABLED: "true"
+      SCHEDULER_ENABLED: "true"
+      JWT_SECRET: "change_me_in_production"
+      CORS_ORIGINS: "*"
+      AUTH_ALLOW_REGISTER: "false"
+    ports:
+      - "5050:5050"
+
+  worker-market:
+    build:
+      context: .
+    container_name: finsathi-worker-market
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/finsathi
+      REDIS_URL: redis://redis:6379
+      MIGRATE_ON_START: "false"
+    command: ["node", "marketWorker.js"]
+
+  worker-fundamentals:
+    build:
+      context: .
+    container_name: finsathi-worker-fundamentals
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/finsathi
+      REDIS_URL: redis://redis:6379
+      MIGRATE_ON_START: "false"
+    command: ["node", "fundamentalsWorker.js"]
+
+  worker-news:
+    build:
+      context: .
+    container_name: finsathi-worker-news
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/finsathi
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+      NEWS_RSS_FEEDS: ${NEWS_RSS_FEEDS:-}
+      MIGRATE_ON_START: "false"
+    command: ["node", "newsWorker.js"]
+
+  worker-analysis:
+    build:
+      context: .
+    container_name: finsathi-worker-analysis
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/finsathi
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MIGRATE_ON_START: "false"
+    command: ["node", "analysisWorker.js"]
+
+volumes:
+  finsathi_pg:
+

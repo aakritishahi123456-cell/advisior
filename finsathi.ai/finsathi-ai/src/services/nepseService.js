@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { getPrisma } = require('../database/prismaClient');
+const { parseCompanies, parseDailyPrices } = require('../market/marketParser');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -107,44 +108,14 @@ class NepseService {
   async fetchCompanies() {
     const url = this.buildUrl(this.endpoints.companies);
     const data = await this.requestJson({ method: 'GET', url });
-    const rows = unwrapData(data);
-
-    return rows
-      .map((r) => ({
-        symbol: String(r.symbol || r.symbolCode || r.ticker || '').toUpperCase(),
-        name: String(r.name || r.companyName || '').trim(),
-        sector: r.sector ? String(r.sector).trim() : null,
-        listedYear: r.listedYear ? Number(r.listedYear) : null,
-      }))
-      .filter((c) => c.symbol && c.name);
+    return parseCompanies(data);
   }
 
   async fetchDailyPrices(businessDateISO) {
     const url = this.buildUrl(this.endpoints.pricesDaily);
     const params = businessDateISO ? { date: businessDateISO } : undefined;
     const data = await this.requestJson({ method: 'GET', url, params });
-    const rows = unwrapData(data);
-
-    const businessDate = businessDateISO ? asDate(businessDateISO) : null;
-
-    return rows
-      .map((r) => {
-        const symbol = String(r.symbol || r.symbolCode || r.ticker || '').toUpperCase();
-        const date = asDate(r.date || r.businessDate || businessDate) || null;
-        if (!symbol || !date) return null;
-
-        return {
-          symbol,
-          date,
-          open: r.open ?? r.openPrice ?? null,
-          high: r.high ?? r.highPrice ?? null,
-          low: r.low ?? r.lowPrice ?? null,
-          close: r.close ?? r.closePrice ?? null,
-          volume: r.volume ?? r.totalVolume ?? null,
-          source: r.source || 'NEPSE',
-        };
-      })
-      .filter(Boolean);
+    return parseDailyPrices(data, { businessDateISO });
   }
 
   async fetchIndices(businessDateISO) {

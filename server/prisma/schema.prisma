@@ -28,7 +28,7 @@ model User {
   subscriptions   Subscription[]
   userUsage       UserUsage[]
   apiUsageLogs    ApiUsageLog[]
-  financialReports FinancialReport[]
+  aiReports AIReport[]
   financialProfiles FinancialProfile[]
 
   @@map("users")
@@ -82,7 +82,7 @@ model Company {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   // Relations
-  financialReports FinancialReport[]
+  aiReports AIReport[]
   aiReports        AIReport[]
   nepsePrices      NepsePrice[]
   nepseFinancials  NepseFinancial[]
@@ -97,10 +97,10 @@ model NepsePrice {
   id        String   @id @default(cuid())
   symbol    String
   date      DateTime
-  open      Float?   @map("open") @db.Decimal(12, 2)
-  close     Float?   @map("close") @db.Decimal(12, 2)
-  high      Float?   @map("high") @db.Decimal(12, 2)
-  low       Float?   @map("low") @db.Decimal(12, 2)
+  open      Float?   @map("open") 
+  close     Float?   @map("close") 
+  high      Float?   @map("high") 
+  low       Float?   @map("low") 
   volume    BigInt?  @map("volume")
   source    String   @default("NEPSE")
   createdAt DateTime @default(now()) @map("created_at")
@@ -117,10 +117,10 @@ model NepseFinancial {
   id            String   @id @default(cuid())
   symbol        String
   asOfDate      DateTime @map("as_of_date")
-  eps           Float?   @map("eps") @db.Decimal(12, 4)
-  peRatio       Float?   @map("pe_ratio") @db.Decimal(12, 4)
+  eps           Float?   @map("eps") 
+  peRatio       Float?   @map("pe_ratio") 
   marketCap     BigInt?  @map("market_cap")
-  dividendYield Float?   @map("dividend_yield") @db.Decimal(12, 4)
+  dividendYield Float?   @map("dividend_yield") 
   source        String   @default("NEPSE")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -138,11 +138,11 @@ model FinancialReport {
   id          String   @id @default(cuid())
   companyId   String   @map("company_id")
   year        Int
-  revenue     Float    @db.Decimal(15, 2)
-  netProfit   Float    @map("net_profit") @db.Decimal(15, 2)
-  totalAssets Float    @map("total_assets") @db.Decimal(15, 2)
-  totalEquity Float    @map("total_equity") @db.Decimal(15, 2)
-  totalDebt   Float    @map("total_debt") @db.Decimal(15, 2)
+  revenue     Float    
+  netProfit   Float    @map("net_profit") 
+  totalAssets Float    @map("total_assets") 
+  totalEquity Float    @map("total_equity") 
+  totalDebt   Float    @map("total_debt") 
   createdAt   DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -160,12 +160,12 @@ model FinancialReport {
 model LoanSimulation {
   id            String   @id @default(cuid())
   userId        String?  @map("user_id") // Optional for MVP
-  amount        Float    @db.Decimal(15, 2) // Loan principal
-  rate          Float    @db.Decimal(8, 4) // Interest rate (annual percentage)
+  amount        Float     // Loan principal
+  rate          Float     // Interest rate (annual percentage)
   tenure        Int      // Tenure in years
-  emi           Float    @db.Decimal(15, 2) // Equated Monthly Installment
-  totalInterest Float    @map("total_interest") @db.Decimal(15, 2)
-  totalPayment  Float    @map("total_payment") @db.Decimal(15, 2)
+  emi           Float     // Equated Monthly Installment
+  totalInterest Float    @map("total_interest") 
+  totalPayment  Float    @map("total_payment") 
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -191,7 +191,7 @@ model AIReport {
   financialReportId String? @map("financial_report_id")
   year         Int?
   analysisText String   @map("analysis_text") @db.Text
-  riskScore    Float    @map("risk_score") @db.Decimal(5, 2)
+  riskScore    Float    @map("risk_score") 
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -248,20 +248,20 @@ enum SubscriptionStatus {
 model FinancialProfile {
   id                    String   @id @default(cuid())
   userId                String   @map("user_id")
-  monthlyIncome         Float    @map("monthly_income") @db.Decimal(15, 2)
-  monthlyExpenses      Float    @map("monthly_expenses") @db.Decimal(15, 2)
-  currentSavings       Float    @map("current_savings") @db.Decimal(15, 2)
+  monthlyIncome         Float    @map("monthly_income") 
+  monthlyExpenses      Float    @map("monthly_expenses") 
+  currentSavings       Float    @map("current_savings") 
   riskTolerance        RiskTolerance @map("risk_tolerance")
   investmentHorizonYears Int      @map("investment_horizon_years")
   financialGoal        FinancialGoal @map("financial_goal")
-  targetAmount         Float?   @map("target_amount") @db.Decimal(15, 2)
+  targetAmount         Float?   @map("target_amount") 
   targetDate          DateTime? @map("target_date")
-  monthlyContribution  Float?   @map("monthly_contribution") @db.Decimal(15, 2)
+  monthlyContribution  Float?   @map("monthly_contribution") 
   emergencyFundMonths  Int?     @map("emergency_fund_months")
   insuranceCoverage    Boolean? @map("insurance_coverage") @default(false)
   dependentsCount     Int?     @map("dependents_count")
   employmentStatus     String?  @map("employment_status")
-  annualIncomeGrowth   Float?   @map("annual_income_growth") @db.Decimal(5, 2)
+  annualIncomeGrowth   Float?   @map("annual_income_growth") 
   preferredInvestmentTypes String[] @map("preferred_investment_types")
   investmentExperience  String?  @map("investment_experience")
   liquidityPreference   String?  @map("liquidity_preference")
@@ -295,10 +295,10 @@ model InvestmentRecommendation {
   investmentType        String   @map("investment_type")
   recommendationText    String   @map("recommendation_text") @db.Text
   riskLevel            String   @map("risk_level")
-  expectedReturn        Float?   @map("expected_return") @db.Decimal(5, 2)
+  expectedReturn        Float?   @map("expected_return") 
   timeHorizon          Int?     @map("time_horizon")
-  minimumInvestment    Float?   @map("minimum_investment") @db.Decimal(15, 2)
-  confidenceScore      Float?   @map("confidence_score") @db.Decimal(3, 2)
+  minimumInvestment    Float?   @map("minimum_investment") 
+  confidenceScore      Float?   @map("confidence_score") 
   isActive             Boolean  @default(true) @map("is_active")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
@@ -320,13 +320,13 @@ model FinancialGoalProfile {
   financialProfileId    String   @map("financial_profile_id")
   goalType             String   @map("goal_type")
   goalName             String   @map("goal_name")
-  targetAmount          Float    @map("target_amount") @db.Decimal(15, 2)
-  currentAmount        Float    @map("current_amount") @db.Decimal(15, 2)
+  targetAmount          Float    @map("target_amount") 
+  currentAmount        Float    @map("current_amount") 
   targetDate           DateTime @map("target_date")
-  monthlyContribution  Float    @map("monthly_contribution") @db.Decimal(15, 2)
+  monthlyContribution  Float    @map("monthly_contribution") 
   priority             String   @map("priority")
   status               String   @map("status")
-  progressPercentage    Float    @map("progress_percentage") @db.Decimal(5, 2)
+  progressPercentage    Float    @map("progress_percentage") 
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
@@ -373,10 +373,10 @@ model TrainingData {
   id          String   @id @default(cuid())
   symbol      String
   date        DateTime
-  open        Float    @db.Decimal(12, 2)
-  high        Float    @db.Decimal(12, 2)
-  low         Float    @db.Decimal(12, 2)
-  close       Float    @db.Decimal(12, 2)
+  open        Float    
+  high        Float    
+  low         Float    
+  close       Float    
   volume      Int
   source      String   @default("NEPSE")
   version     Int      @default(1)
@@ -530,4 +530,25 @@ model DatasetVersion {
   @@unique([name, version])
   @@index([name])
   @@map("dataset_versions")
+}
+
+// Loan Products Scraped Data
+model LoanProduct {
+  id                      String   @id @default(cuid())
+  bankName                String   @map("bank_name")
+  loanType                String   @map("loan_type")
+  interestRate            Float    @map("interest_rate")
+  interestRateMax         Float?   @map("interest_rate_max")
+  loanTerm                Int?     @map("loan_term")
+  minimumIncome           Float?   @map("minimum_income")
+  maxLoanAmount           Float?   @map("max_loan_amount")
+  processingFee           Float?   @map("processing_fee")
+  eligibilityRequirements String?  @map("eligibility_requirements")
+  sourceUrl               String?  @map("source_url")
+  lastUpdated             DateTime @map("last_updated")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@unique([bankName, loanType, sourceUrl, loanTerm], name: "provider_product_unique")
+  @@map("loan_products")
 }

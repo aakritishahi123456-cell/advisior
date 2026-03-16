@@ -8,8 +8,8 @@ function notFoundHandler(req, res) {
 function errorHandler(err, req, res, next) {
   logger.error({ err: err?.message, stack: err?.stack }, 'Unhandled error');
   const status = Number(err?.statusCode || 500);
-  res.status(status).json({ error: err?.message || 'Internal Server Error' });
+  const expose = status < 500 || process.env.NODE_ENV !== 'production';
+  res.status(status).json({ error: expose ? (err?.message || 'Error') : 'Internal Server Error' });
 }
 
 module.exports = { errorHandler, notFoundHandler };
-
