@@ -32,7 +32,7 @@ export default function PortfolioBuilderPage() {
   const [risk, setRisk] = useState<'conservative' | 'moderate' | 'aggressive'>('moderate')
   const [amount, setAmount] = useState(100000)
 
-  const data = useMemo<AllocationSlice[]>(() => allocations[risk] as AllocationSlice[], [risk])
+  const data = useMemo<readonly AllocationSlice[]>(() => allocations[risk], [risk])
 
   return (
     <div className="space-y-6">

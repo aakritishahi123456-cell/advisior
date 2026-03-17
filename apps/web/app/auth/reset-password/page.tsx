@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 export default function ResetPasswordPage() {
   const router = useRouter()
   const params = useSearchParams()
-  const token = params.get('token')
+  const token = params?.get('token')
 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')

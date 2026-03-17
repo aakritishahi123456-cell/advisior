@@ -88,10 +88,12 @@ function PredictionCard({ prediction }: { prediction: Prediction }) {
   )
 }
 
-function SignalCard({ signal }) {
-  const getSignalColor = (signal) => {
-    if (signal.includes('BUY')) return 'bg-green-100 text-green-700'
-    if (signal.includes('SELL')) return 'bg-red-100 text-red-700'
+type SignalInfo = { symbol: string; signal: string; rsi: number; sma: string; confidence: number };
+
+function SignalCard({ signal }: { signal: SignalInfo }) {
+  const getSignalColor = (sig: string) => {
+    if (sig.includes('BUY')) return 'bg-green-100 text-green-700'
+    if (sig.includes('SELL')) return 'bg-red-100 text-red-700'
     return 'bg-yellow-100 text-yellow-700'
   }
   
@@ -215,7 +217,9 @@ function SectorPerformance() {
   )
 }
 
-function MetricCard({ title, value, change, icon: Icon }) {
+import { LucideIcon } from 'lucide-react';
+
+function MetricCard({ title, value, change, icon: Icon }: { title: string; value: string | number; change: number; icon: LucideIcon }) {
   const isPositive = change >= 0
   
   return (

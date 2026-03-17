@@ -4,7 +4,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 
 export type AllocationSlice = { name: string; value: number; color: string }
 
-export default function PortfolioDonut({ data }: { data: AllocationSlice[] }) {
+export default function PortfolioDonut({ data }: { data: readonly AllocationSlice[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <PieChart>
@@ -17,7 +17,7 @@ export default function PortfolioDonut({ data }: { data: AllocationSlice[] }) {
           }}
         />
         <Pie
-          data={data}
+          data={data as any}
           dataKey="value"
           nameKey="name"
           innerRadius={72}
