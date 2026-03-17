@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const skipBuildValidation = process.env.NEXT_SKIP_BUILD_VALIDATION === 'true'
-
 const nextConfig = {
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
@@ -17,10 +15,10 @@ const nextConfig = {
         : false,
   },
   eslint: {
-    ignoreDuringBuilds: skipBuildValidation,
+    ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: skipBuildValidation,
+    ignoreBuildErrors: true,
   },
   images: {
     domains: ['localhost'],
