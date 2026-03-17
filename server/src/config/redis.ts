@@ -10,9 +10,14 @@ export const connectRedis = async (): Promise<Redis> => {
 
   try {
     redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      retryStrategy: (times) => {
+        if (times > 3) {
+          return null;
+        }
+        return Math.min(times * 100, 3000);
+      }
     });
 
     redis.on('connect', () => {
