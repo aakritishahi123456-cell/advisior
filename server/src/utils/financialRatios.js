@@ -132,6 +132,14 @@ function calculateFinancialRatios(financialReport, options = {}) {
     totalDebt = null,
   } = financialReport;
 
+  // Validate that numeric fields are actually numbers
+  const numericFields = { revenue, netProfit, totalAssets, totalEquity, totalDebt };
+  for (const [field, val] of Object.entries(numericFields)) {
+    if (val !== null && val !== undefined && typeof val !== 'number') {
+      throw new Error(`Invalid data type for ${field}: expected number, got ${typeof val}`);
+    }
+  }
+
   // Calculate basic ratios
   const ratios = {
     // Profitability Ratios
@@ -337,31 +345,31 @@ function analyzeAgainstIndustryBenchmarks(ratios, industry) {
  */
 function getIndustryBenchmarks(industry) {
   const benchmarks = {
-    'Banking': {
+    'BANKING': {
       returnOnEquity: 12,
       netProfitMargin: 15,
       debtToEquity: 8,
       assetTurnover: 0.08,
     },
-    'Insurance': {
+    'INSURANCE': {
       returnOnEquity: 10,
       netProfitMargin: 12,
       debtToEquity: 2,
       assetTurnover: 0.3,
     },
-    'Manufacturing': {
+    'MANUFACTURING': {
       returnOnEquity: 15,
       netProfitMargin: 8,
       debtToEquity: 1.5,
       assetTurnover: 1.2,
     },
-    'Technology': {
+    'TECHNOLOGY': {
       returnOnEquity: 18,
       netProfitMargin: 20,
       debtToEquity: 0.8,
       assetTurnover: 0.9,
     },
-    'Telecommunications': {
+    'TELECOMMUNICATIONS': {
       returnOnEquity: 14,
       netProfitMargin: 18,
       debtToEquity: 1.8,

@@ -1,11 +1,14 @@
 import { Request, Response } from 'express';
-import { FinancialRatioService } from '../services/financialRatio.service';
-import { asyncHandler } from '../middleware/asyncHandler';
+import { PrismaClient } from '@prisma/client';
+import { FinancialRatioService, FinancialRatios } from '../services/financialRatio.service';
+import { asyncHandler } from '../middleware/errorHandler';
 import { createError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { z } from 'zod';
 import logger from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 // Validation schemas
 const calculateRatiosSchema = z.object({
@@ -588,7 +591,7 @@ export class FinancialRatioController {
         message: 'Ratios formatted successfully',
       },
     });
-  }
+  });
 
   /**
    * Get color coding for ratios
@@ -623,7 +626,7 @@ export class FinancialRatioController {
         message: 'Ratio colors generated successfully',
       },
     });
-  }
+  });
 
   /**
    * Export ratios to CSV

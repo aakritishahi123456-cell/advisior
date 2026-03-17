@@ -329,15 +329,15 @@ function getIndustryWeights(industry, weighting = 'BALANCED') {
   };
 
   let finalWeights = { ...baseWeights };
-  
-  // Apply industry adjustments
+
+  // Apply weighting strategy first (as base override)
+  if (weighting && weighting !== 'BALANCED' && weightingAdjustments[weighting]) {
+    finalWeights = { ...finalWeights, ...weightingAdjustments[weighting] };
+  }
+
+  // Apply industry adjustments on top (industry takes precedence over weighting strategy)
   if (industry && industryAdjustments[industry.toUpperCase()]) {
     finalWeights = { ...finalWeights, ...industryAdjustments[industry.toUpperCase()] };
-  }
-  
-  // Apply weighting strategy
-  if (weightingAdjustments[weighting]) {
-    finalWeights = { ...finalWeights, ...weightingAdjustments[weighting] };
   }
 
   return finalWeights;
@@ -450,16 +450,16 @@ function validateFinancialMetrics(metrics) {
   });
 
   // Range validation
-  if (metrics.roe !== undefined && (metrics.roe < -100 || metrics.roe > 100)) {
-    errors.push('ROE outside reasonable range (-100% to 100%)');
+  if (metrics.roe !== undefined && (metrics.roe < -500 || metrics.roe > 500)) {
+    errors.push('ROE outside reasonable range');
   }
 
-  if (metrics.debtRatio !== undefined && (metrics.debtRatio < 0 || metrics.debtRatio > 10)) {
-    errors.push('Debt ratio outside reasonable range (0 to 10)');
+  if (metrics.debtRatio !== undefined && (metrics.debtRatio < 0 || metrics.debtRatio > 100)) {
+    errors.push('Debt ratio outside reasonable range (0 to 100)');
   }
 
-  if (metrics.profitMargin !== undefined && (metrics.profitMargin < -100 || metrics.profitMargin > 100)) {
-    errors.push('Profit margin outside reasonable range (-100% to 100%)');
+  if (metrics.profitMargin !== undefined && (metrics.profitMargin < -500 || metrics.profitMargin > 500)) {
+    errors.push('Profit margin outside reasonable range');
   }
 
   return {

@@ -71,8 +71,8 @@ describe('Financial Normalization Tests', () => {
     });
 
     test('should handle Devanagari digits', () => {
-      expect(normalizeNepaliNumber("१,२०,०००")).toBe(1200000);
-      expect(normalizeNepaliNumber("रू १,२०,०००")).toBe(1200000);
+      expect(normalizeNepaliNumber("१,२०,०००")).toBe(120000);
+      expect(normalizeNepaliNumber("रू १,२०,०००")).toBe(120000);
     });
   });
 

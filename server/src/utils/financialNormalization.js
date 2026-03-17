@@ -25,16 +25,47 @@ function normalizeFinancialValue(value, options = {}) {
   // Convert to string for processing
   let stringValue = String(value).trim();
 
+  // Convert Devanagari digits to Arabic before other processing
+  stringValue = convertDevanagariDigits(stringValue);
+
   // Remove currency symbols and text
   if (removeCurrency) {
     stringValue = removeCurrencySymbols(stringValue);
   }
 
+  // Handle Nepali lakh/crore notation before other processing
+  const nepaliMultipliers = {
+    'CRORES?': 10000000,
+    'LAKHS?': 100000,
+    'ARABS?': 1000000000,
+    'KARBS?': 1000000000,
+  };
+  for (const [word, multiplier] of Object.entries(nepaliMultipliers)) {
+    const pattern = new RegExp(`([\\d,\\.]+)\\s*${word}`, 'i');
+    const match = stringValue.match(pattern);
+    if (match) {
+      const num = parseFloat(match[1].replace(/,/g, ''));
+      if (!isNaN(num)) return round(num * multiplier, roundTo !== null && roundTo !== undefined ? roundTo : 2);
+    }
+  }
+
   // Handle parentheses for negative numbers
   stringValue = handleParentheses(stringValue);
 
+  // Check for mixed alphanumeric (malformed) - letters mixed with digits
+  const trimmed = stringValue.trim();
+  if (/[a-zA-Z]/.test(trimmed) && /\d/.test(trimmed)) {
+    return defaultValue;
+  }
+
   // Remove commas and other formatting
   stringValue = removeFormatting(stringValue);
+
+  // Reject strings with multiple decimal points (malformed like "1.2.3.4")
+  const dotCount = (stringValue.match(/\./g) || []).length;
+  if (dotCount > 1) {
+    return defaultValue;
+  }
 
   // Convert to number
   let numericValue = parseFloat(stringValue);
@@ -244,18 +275,30 @@ function validateAndNormalizeFinancialData(financialData) {
     totalDebt: { min: 0, max: 1000000000000, required: true },
   };
 
-  const normalized = normalizeFinancialData(financialData, requiredFields);
   const errors = [];
   const warnings = [];
 
+  // Check for missing required fields BEFORE normalization
+  requiredFields.forEach(field => {
+    if (financialData[field] === null || financialData[field] === undefined) {
+      errors.push(`${field} is required but missing`);
+    } else if (typeof financialData[field] === 'string') {
+      // Check if string value is parseable as a number (after normalization)
+      const normalized = normalizeFinancialValue(financialData[field]);
+      if (normalized === 0 && financialData[field].trim() !== '0' && !/\d/.test(financialData[field])) {
+        errors.push(`${field} has invalid value: "${financialData[field]}"`);
+      }
+    }
+  });
+
+  const normalized = normalizeFinancialData(financialData, requiredFields);
+
   // Validate each field
   Object.entries(validationRules).forEach(([field, rules]) => {
+    // Skip if already flagged as missing
+    if (financialData[field] === null || financialData[field] === undefined) return;
+
     const value = normalized[field];
-    
-    if (rules.required && (value === null || value === undefined)) {
-      errors.push(`${field} is required but missing`);
-      return;
-    }
 
     if (typeof value === 'number') {
       if (value < rules.min) {

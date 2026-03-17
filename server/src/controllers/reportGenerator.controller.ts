@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { ReportGeneratorService } from '../services/reportGenerator.service';
 import { FinancialRatioService } from '../services/financialRatio.service';
-import { asyncHandler } from '../middleware/asyncHandler';
+import { asyncHandler } from '../middleware/errorHandler';
 import { createError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { z } from 'zod';
 import logger from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 // Validation schemas
 const generateReportSchema = z.object({
@@ -556,7 +559,7 @@ Confidence Score: ${analysis.confidence}%
     }
 
     next();
-  }
+  });
 
   /**
    * Rate limiting for AI report generation

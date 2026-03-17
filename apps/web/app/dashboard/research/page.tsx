@@ -46,7 +46,9 @@ const mockSectors = [
   { name: 'Hotel', change: 1.5, volume: 5500000 },
 ]
 
-function PredictionCard({ prediction }) {
+type Prediction = { symbol: string; direction: string; probability: number; confidence: number; price: number; target: number }
+
+function PredictionCard({ prediction }: { prediction: Prediction }) {
   const isUp = prediction.direction === 'UP'
   
   return (

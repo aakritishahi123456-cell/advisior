@@ -31,6 +31,7 @@ model User {
   aiReports AIReport[]
   financialProfiles FinancialProfile[]
   optimizedPortfolios OptimizedPortfolio[]
+  researchQueries   ResearchQuery[]
 
   @@map("users")
 }
@@ -93,6 +94,9 @@ model Company {
   articleLinks     ArticleCompanyLink[]
   newsSentiments   NewsSentiment[]
   portfolioAllocations PortfolioAllocation[]
+  companyDocuments CompanyDocument[]
+  extractedFacts   ExtractedFinancialFact[]
+  companyClassification CompanyClassification?
 
   // Indexes
   @@index([symbol])
@@ -813,4 +817,107 @@ model PortfolioAllocation {
   @@index([portfolioId])
   @@index([companyId])
   @@map("portfolio_allocations")
+}
+
+// ----------------------------------------------------------------------
+// FinSathi AI Research Agent Schema Additions
+// ----------------------------------------------------------------------
+
+model CompanyDocument {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  title       String
+  documentType String  @map("document_type") // e.g., "ANNUAL_REPORT", "QUARTERLY_REPORT"
+  sourceUrl   String?  @map("source_url")
+  publishedAt DateTime @map("published_at")
+  parsedText  String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  chunks      DocumentChunk[]
+  extractedFacts ExtractedFinancialFact[]
+
+  @@index([companyId])
+  @@index([documentType])
+  @@map("company_documents")
+}
+
+model DocumentChunk {
+  id             String   @id @default(cuid())
+  documentId     String   @map("document_id")
+  pageNumber     Int?     @map("page_number")
+  chunkIndex     Int      @map("chunk_index")
+  content        String   @db.Text
+  tokenCount     Int?     @map("token_count")
+  // Note: we store embeddings in a dedicated Vector DB like ChromaDB/Pinecone.
+  // Alternatively, using pgvector, but here we keep the relation reference.
+  
+  document       CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+model ExtractedFinancialFact {
+  id             String   @id @default(cuid())
+  documentId     String   @map("document_id")
+  companyId      String   @map("company_id")
+  metricName     String   @map("metric_name")
+  metricValue    String   @map("metric_value")
+  context        String?  @db.Text
+  pageNumber     Int?     @map("page_number")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  document       CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([documentId])
+  @@index([metricName])
+  @@map("extracted_financial_facts")
+}
+
+model CompanyClassification {
+  id             String   @id @default(cuid())
+  companyId      String   @map("company_id")
+  sector         String
+  strategy       String
+  confidenceScore Float   @map("confidence_score")
+  justification  String   @db.Text
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId])
+  @@map("company_classifications")
+}
+
+model ResearchQuery {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  queryText      String   @map("query_text") @db.Text
+  status         String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  createdAt      DateTime @default(now()) @map("created_at")
+  
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers        ResearchAnswer[]
+
+  @@index([userId])
+  @@map("research_queries")
+}
+
+model ResearchAnswer {
+  id             String   @id @default(cuid())
+  queryId        String   @map("query_id")
+  answerText     String   @db.Text
+  confidenceScore Float   @map("confidence_score")
+  reasoningChain Json?    @map("reasoning_chain") // To store the explainable AI steps
+  citations      Json     // Array of references: { documentId, pageNumber, snippet }
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  query          ResearchQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  @@index([queryId])
+  @@map("research_answers")
 }

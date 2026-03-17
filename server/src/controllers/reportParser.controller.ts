@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
 import multer from 'multer';
+import { PrismaClient } from '@prisma/client';
 import { PDFParserService } from '../services/pdfParser.service';
-import { asyncHandler } from '../middleware/asyncHandler';
+import { asyncHandler } from '../middleware/errorHandler';
 import { createError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { z } from 'zod';
 import logger from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 // Validation schemas
 const parseReportSchema = z.object({

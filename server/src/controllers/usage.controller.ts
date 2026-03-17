@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { usageService } from '../services/usage.service';
-import { asyncHandler } from '../middleware/asyncHandler';
+import { asyncHandler } from '../middleware/errorHandler';
 import { createError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
+
+const prisma = new PrismaClient();
 
 // Get current usage statistics
 export const getCurrentUsage = asyncHandler(async (req: Request, res: Response) => {
