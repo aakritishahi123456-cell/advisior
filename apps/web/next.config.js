@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+const fallbackApiUrl = 'https://advisior-api.onrender.com'
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || fallbackApiUrl
 const normalizedApiUrl = rawApiUrl.replace(/\/+$/, '')
 
 const nextConfig = {

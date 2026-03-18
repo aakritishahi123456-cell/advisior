@@ -27,6 +27,7 @@ export interface ApiError {
 class ApiClient {
   private client: AxiosInstance
   private baseURL: string
+  private static readonly FALLBACK_PRODUCTION_API_URL = 'https://advisior-api.onrender.com'
 
   constructor(baseURL: string = ApiClient.resolveBaseURL()) {
     this.baseURL = baseURL
@@ -52,7 +53,7 @@ class ApiClient {
     }
 
     if (isProduction) {
-      return ''
+      return this.FALLBACK_PRODUCTION_API_URL
     }
 
     return 'http://localhost:3001'
@@ -231,7 +232,39 @@ class ApiClient {
   private handleError(error: any): ApiError {
     if (error.response) {
       // Server responded with error
-      return error.response.data as ApiError
+      const responseData = error.response.data
+
+      if (typeof responseData === 'string') {
+        return {
+          success: false,
+          error:
+            error.response.status === 404
+              ? 'API route not found. Check the deployed backend URL.'
+              : 'The server returned an invalid response.',
+          code: `HTTP_${error.response.status}`,
+          details: responseData,
+        }
+      }
+
+      if (responseData?.error) {
+        return responseData as ApiError
+      }
+
+      if (responseData?.message) {
+        return {
+          success: false,
+          error: responseData.message,
+          code: `HTTP_${error.response.status}`,
+          details: responseData,
+        }
+      }
+
+      return {
+        success: false,
+        error: `Request failed with status ${error.response.status}.`,
+        code: `HTTP_${error.response.status}`,
+        details: responseData,
+      }
     } else if (error.request) {
       // Network error
       return {
