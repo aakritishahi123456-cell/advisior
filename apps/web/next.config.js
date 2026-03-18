@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+const normalizedApiUrl = rawApiUrl.replace(/\/+$/, '')
+
 const nextConfig = {
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
-  },
   experimental: {
     workerThreads: true,
     optimizePackageImports: ['lucide-react', '@heroicons/react'],
@@ -23,6 +23,18 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
     formats: ['image/avif', 'image/webp'],
+  },
+  async rewrites() {
+    if (!normalizedApiUrl) {
+      return []
+    }
+
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${normalizedApiUrl}/api/:path*`,
+      },
+    ]
   },
 }
 

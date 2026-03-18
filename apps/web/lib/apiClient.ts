@@ -28,10 +28,10 @@ class ApiClient {
   private client: AxiosInstance
   private baseURL: string
 
-  constructor(baseURL: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') {
+  constructor(baseURL: string = ApiClient.resolveBaseURL()) {
     this.baseURL = baseURL
     this.client = axios.create({
-      baseURL: `${this.baseURL}/api/v1`,
+      baseURL: ApiClient.buildApiBaseURL(this.baseURL),
       timeout: 30000, // 30 seconds
       headers: {
         'Content-Type': 'application/json',
@@ -39,6 +39,27 @@ class ApiClient {
     })
 
     this.setupInterceptors()
+  }
+
+  private static resolveBaseURL(): string {
+    const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/+$/, '')
+    const isProduction = process.env.NODE_ENV === 'production'
+    const isLocalhost =
+      configured.includes('localhost') || configured.includes('127.0.0.1')
+
+    if (configured && (!isProduction || !isLocalhost)) {
+      return configured
+    }
+
+    if (isProduction) {
+      return ''
+    }
+
+    return 'http://localhost:3001'
+  }
+
+  private static buildApiBaseURL(baseURL: string): string {
+    return baseURL ? `${baseURL}/api/v1` : '/api/v1'
   }
 
   private setupInterceptors() {
