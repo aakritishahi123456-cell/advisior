@@ -20,34 +20,18 @@ for (const key of requiredEnv) {
   }
 }
 
-function resolveAllowedOrigins(): string[] {
-  const configured = [
-    process.env.CORS_ORIGIN,
-    process.env.FRONTEND_URL,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => value!.split(','))
-    .map((value) => value.trim())
-    .filter(Boolean)
-
-  return configured.length > 0 ? configured : ['http://localhost:3000']
-}
-
-const allowedOrigins = resolveAllowedOrigins()
-
 app.use(helmet())
 app.use(cors({
   origin(origin, callback) {
-    const isAllowedVercelPreview =
-      !!origin &&
-      (origin.endsWith('.vercel.app') || origin.endsWith('.vercel.app/'))
-
-    if (!origin || allowedOrigins.includes(origin) || isAllowedVercelPreview) {
+    if (!origin) {
       callback(null, true)
       return
     }
 
-    callback(new Error(`Origin ${origin} is not allowed by CORS`))
+    // Reflect any browser origin for the auth-only Render service so
+    // Vercel production and preview deployments both work without
+    // constantly updating explicit allowlists.
+    callback(null, true)
   },
   credentials: true,
 }))
