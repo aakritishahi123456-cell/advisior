@@ -27,7 +27,7 @@ export interface ApiError {
 class ApiClient {
   private client: AxiosInstance
   private baseURL: string
-  private static readonly FALLBACK_PRODUCTION_API_URL = 'https://advisior-api.onrender.com'
+  private static readonly FALLBACK_PRODUCTION_API_URL = 'https://advisior.onrender.com'
 
   constructor(baseURL: string = ApiClient.resolveBaseURL()) {
     this.baseURL = baseURL
