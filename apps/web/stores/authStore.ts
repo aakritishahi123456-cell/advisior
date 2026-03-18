@@ -184,9 +184,14 @@ export const useAuthStore = create<AuthState>()(
             throw new Error(response.error || 'Registration failed')
           }
         } catch (error: any) {
+          const normalizedError =
+            Array.isArray(error?.error)
+              ? error.error.map((issue: any) => issue?.message).filter(Boolean).join(', ')
+              : error?.error
+
           set({
             isLoading: false,
-            error: error.error || 'Registration failed',
+            error: normalizedError || 'Registration failed',
             isAuthenticated: false,
             user: null,
             token: null

@@ -9,13 +9,18 @@ import { loginLimiter, registerLimiter, refreshLimiter } from '../middleware/rat
 
 const router = Router();
 const prisma = new PrismaClient();
+const optionalTrimmedString = z
+  .string()
+  .trim()
+  .transform((value) => (value === '' ? undefined : value))
+  .optional()
 
 // Validation schemas
 const registerSchema = z.object({
   email: z.string().email('Invalid email format'),
-  firstName: z.string().min(1).max(100).optional(),
-  lastName: z.string().min(1).max(100).optional(),
-  phone: z.string().min(1).max(30).optional(),
+  firstName: optionalTrimmedString,
+  lastName: optionalTrimmedString,
+  phone: optionalTrimmedString,
   password: z.string()
     .min(8, 'Password must be at least 8 characters long')
     .max(128, 'Password must be less than 128 characters')
