@@ -13,10 +13,22 @@ dotenv.config()
 const app = express()
 const port = Number(process.env.PORT || 3001)
 const requiredEnv = ['DATABASE_URL', 'JWT_SECRET']
+const isProduction = process.env.NODE_ENV === 'production'
 
 for (const key of requiredEnv) {
   if (!process.env[key]) {
     throw new Error(`Missing required environment variable: ${key}`)
+  }
+}
+
+if (isProduction) {
+  const databaseUrl = process.env.DATABASE_URL || ''
+  const localDatabasePatterns = ['localhost', '127.0.0.1', 'file:']
+
+  if (localDatabasePatterns.some((pattern) => databaseUrl.includes(pattern))) {
+    throw new Error(
+      'Invalid production DATABASE_URL. It points to a local database host. Set DATABASE_URL to your managed Postgres connection string.'
+    )
   }
 }
 
