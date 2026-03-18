@@ -4,7 +4,6 @@ import { PrismaClient } from '@prisma/client';
 import { AuthRequest, asyncHandler, createError } from '../middleware/auth';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Get user profile
 router.get('/profile', asyncHandler(async (req: AuthRequest, res: any) => {
