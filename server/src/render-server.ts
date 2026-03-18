@@ -38,7 +38,11 @@ const allowedOrigins = resolveAllowedOrigins()
 app.use(helmet())
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    const isAllowedVercelPreview =
+      !!origin &&
+      (origin.endsWith('.vercel.app') || origin.endsWith('.vercel.app/'))
+
+    if (!origin || allowedOrigins.includes(origin) || isAllowedVercelPreview) {
       callback(null, true)
       return
     }

@@ -27,7 +27,6 @@ export interface ApiError {
 class ApiClient {
   private client: AxiosInstance
   private baseURL: string
-  private static readonly FALLBACK_PRODUCTION_API_URL = 'https://advisior.onrender.com'
 
   constructor(baseURL: string = ApiClient.resolveBaseURL()) {
     this.baseURL = baseURL
@@ -48,12 +47,12 @@ class ApiClient {
     const isLocalhost =
       configured.includes('localhost') || configured.includes('127.0.0.1')
 
-    if (configured && (!isProduction || !isLocalhost)) {
-      return configured
+    if (isProduction) {
+      return ''
     }
 
-    if (isProduction) {
-      return this.FALLBACK_PRODUCTION_API_URL
+    if (configured && (!isProduction || !isLocalhost)) {
+      return configured
     }
 
     return 'http://localhost:3001'
