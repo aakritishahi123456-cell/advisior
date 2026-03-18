@@ -13,6 +13,9 @@ const prisma = new PrismaClient();
 // Validation schemas
 const registerSchema = z.object({
   email: z.string().email('Invalid email format'),
+  firstName: z.string().min(1).max(100).optional(),
+  lastName: z.string().min(1).max(100).optional(),
+  phone: z.string().min(1).max(30).optional(),
   password: z.string()
     .min(8, 'Password must be at least 8 characters long')
     .max(128, 'Password must be less than 128 characters')
@@ -53,14 +56,21 @@ router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any
   const user = await prisma.user.create({
     data: {
       email: validatedData.email,
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      phone: validatedData.phone,
       passwordHash: hashedPassword,
       role: 'FREE'
     },
     select: {
       id: true,
       email: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
       role: true,
-      createdAt: true
+      createdAt: true,
+      updatedAt: true
     }
   });
 
@@ -77,10 +87,13 @@ router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any
   const tokens = JWTService.generateTokenPair(user);
 
   res.status(201).json({
+    success: true,
     message: 'User registered successfully',
-    user,
-    access_token: tokens.accessToken,
-    refresh_token: tokens.refreshToken
+    data: {
+      user,
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    }
   });
 }));
 
@@ -113,10 +126,13 @@ router.post('/login', loginLimiter, asyncHandler(async (req: any, res: any) => {
   const { passwordHash, ...userWithoutPassword } = user;
 
   res.json({
+    success: true,
     message: 'Login successful',
-    user: userWithoutPassword,
-    access_token: tokens.accessToken,
-    refresh_token: tokens.refreshToken
+    data: {
+      user: userWithoutPassword,
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    }
   });
 }));
 
@@ -146,8 +162,12 @@ router.post('/refresh', refreshLimiter, asyncHandler(async (req: any, res: any) 
     const newAccessToken = JWTService.generateAccessToken(user);
 
     res.json({
+      success: true,
       message: 'Token refreshed successfully',
-      access_token: newAccessToken
+      data: {
+        token: newAccessToken,
+        refreshToken: validatedData.refreshToken
+      }
     });
   } catch (error) {
     if (error instanceof Error) {
@@ -189,8 +209,9 @@ router.get('/me', requireAuth, asyncHandler(async (req: AuthRequest, res: any) =
   }
 
   res.json({
+    success: true,
     message: 'Profile retrieved successfully',
-    user
+    data: user
   });
 }));
 
@@ -201,6 +222,7 @@ router.post('/logout', requireAuth, asyncHandler(async (req: AuthRequest, res: a
   // In a production system, you might want to implement token blacklisting
   
   res.json({
+    success: true,
     message: 'Logout successful'
   });
 }));
