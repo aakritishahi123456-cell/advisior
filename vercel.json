@@ -1,7 +1,6 @@
 {
-  "buildCommand": "npm run build:web",
-  "outputDirectory": "apps/web/.next",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
   "installCommand": "npm install --legacy-peer-deps",
-  "framework": "nextjs",
-  "ignoreBuildErrors": true
+  "framework": "nextjs"
 }
