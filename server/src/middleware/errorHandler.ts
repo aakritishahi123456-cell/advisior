@@ -17,11 +17,20 @@ export const errorHandler = (
   const isDatabaseConnectivityError =
     rawMessage.includes("Can't reach database server") ||
     rawMessage.includes('ECONNREFUSED') ||
-    rawMessage.includes('Invalid production DATABASE_URL')
+    rawMessage.includes('Invalid production DATABASE_URL') ||
+    rawMessage.includes('Error validating datasource `db`')
+
+  const isSupabaseConfigurationError =
+    rawMessage.includes('Invalid SUPABASE_URL') ||
+    rawMessage.includes('SUPABASE_ANON_KEY') ||
+    rawMessage.includes('SUPABASE_SERVICE_ROLE_KEY') ||
+    rawMessage.includes('supabase')
 
   const message = isDatabaseConnectivityError
     ? 'Database is not configured correctly for production. Set DATABASE_URL to your hosted Postgres instance.'
-    : rawMessage;
+    : isSupabaseConfigurationError
+      ? 'Supabase is not configured correctly. Check SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY.'
+      : rawMessage;
 
   logger.error(`Error ${statusCode}: ${message}`, {
     url: req.url,
