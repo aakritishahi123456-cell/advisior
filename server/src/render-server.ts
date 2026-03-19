@@ -6,6 +6,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 
 import authRoutes from './routes/auth.routes'
+import loanSimulationRoutes from './routes/loan-simulations.routes'
 import { errorHandler } from './middleware/errorHandler'
 
 dotenv.config()
@@ -16,7 +17,13 @@ const app = express()
 // Required for express-rate-limit to read X-Forwarded-For correctly.
 app.set('trust proxy', 1)
 const port = Number(process.env.PORT || 3001)
-const requiredEnv = ['DATABASE_URL', 'JWT_SECRET']
+const requiredEnv = [
+  'DATABASE_URL',
+  'JWT_SECRET',
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+]
 const isProduction = process.env.NODE_ENV === 'production'
 
 for (const key of requiredEnv) {
@@ -69,6 +76,7 @@ app.get('/health', healthHandler)
 app.get('/api/v1/health', healthHandler)
 
 app.use('/api/v1/auth', authRoutes)
+app.use('/api/v1/examples/loan-simulations', loanSimulationRoutes)
 
 app.use((req, res) => {
   res.status(404).json({

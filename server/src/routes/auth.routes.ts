@@ -6,6 +6,7 @@ import { JWTService } from '../utils/jwt';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { requireAuth, AuthRequest } from '../middleware/auth.middleware';
 import { loginLimiter, registerLimiter, refreshLimiter } from '../middleware/rateLimiter.middleware';
+import { supabaseAdmin, supabaseAuthClient } from '../lib/supabase';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -35,6 +36,66 @@ const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required')
 });
 
+const sanitizeUser = <T extends {
+  id: string
+  email: string
+  firstName: string | null
+  lastName: string | null
+  phone: string | null
+  role: string
+  createdAt: Date
+  updatedAt: Date
+}>(user: T) => ({
+  id: user.id,
+  email: user.email,
+  firstName: user.firstName || undefined,
+  lastName: user.lastName || undefined,
+  phone: user.phone || undefined,
+  role: user.role,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+})
+
+const syncLocalUser = async (input: {
+  email: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+}) => {
+  const user = await prisma.user.upsert({
+    where: { email: input.email },
+    update: {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+    },
+    create: {
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      passwordHash: '__supabase_managed__',
+      role: 'FREE',
+    },
+  })
+
+  const existingSubscription = await prisma.subscription.findFirst({
+    where: { userId: user.id },
+  })
+
+  if (!existingSubscription) {
+    await prisma.subscription.create({
+      data: {
+        userId: user.id,
+        plan: 'FREE',
+        status: 'ACTIVE',
+      },
+    })
+  }
+
+  return user
+}
+
 // Register endpoint
 router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any) => {
   const validatedData = registerSchema.parse(req.body);
@@ -45,7 +106,6 @@ router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any
     throw createError(passwordValidation.errors.join(', '), 400);
   }
 
-  // Check if user already exists
   const existingUser = await prisma.user.findUnique({
     where: { email: validatedData.email }
   });
@@ -54,87 +114,81 @@ router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any
     throw createError('User with this email already exists', 409);
   }
 
-  // Hash password
-  const hashedPassword = await PasswordService.hashPassword(validatedData.password);
+  const { data: createdAuthUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: validatedData.email,
+    password: validatedData.password,
+    email_confirm: true,
+    user_metadata: {
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      phone: validatedData.phone,
+    },
+  })
 
-  // Create user
-  const user = await prisma.user.create({
-    data: {
+  if (authError) {
+    if (authError.message.toLowerCase().includes('already')) {
+      throw createError('User with this email already exists', 409)
+    }
+
+    throw createError(authError.message, 400)
+  }
+
+  try {
+    const user = await syncLocalUser({
       email: validatedData.email,
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
       phone: validatedData.phone,
-      passwordHash: hashedPassword,
-      role: 'FREE'
-    },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      phone: true,
-      role: true,
-      createdAt: true,
-      updatedAt: true
-    }
-  });
+    })
+    const tokens = JWTService.generateTokenPair(user)
 
-  // Create default subscription
-  await prisma.subscription.create({
-    data: {
-      userId: user.id,
-      plan: 'FREE',
-      status: 'ACTIVE'
+    res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      data: {
+        user: sanitizeUser(user),
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken
+      }
+    });
+  } catch (error) {
+    if (createdAuthUser.user?.id) {
+      await supabaseAdmin.auth.admin.deleteUser(createdAuthUser.user.id)
     }
-  });
 
-  // Generate tokens
-  const tokens = JWTService.generateTokenPair(user);
-
-  res.status(201).json({
-    success: true,
-    message: 'User registered successfully',
-    data: {
-      user,
-      token: tokens.accessToken,
-      refreshToken: tokens.refreshToken
-    }
-  });
+    throw error
+  }
 }));
 
 // Login endpoint
 router.post('/login', loginLimiter, asyncHandler(async (req: any, res: any) => {
   const validatedData = loginSchema.parse(req.body);
 
-  // Find user
-  const user = await prisma.user.findUnique({
-    where: { email: validatedData.email }
-  });
+  const { data: authSession, error: authError } = await supabaseAuthClient.auth.signInWithPassword({
+    email: validatedData.email,
+    password: validatedData.password,
+  })
 
-  if (!user) {
+  if (authError || !authSession.user) {
     throw createError('Invalid email or password', 401);
   }
 
-  // Verify password
-  const isPasswordValid = await PasswordService.verifyPassword(
-    validatedData.password, 
-    user.passwordHash
-  );
-
-  if (!isPasswordValid) {
-    throw createError('Invalid email or password', 401);
-  }
+  const metadata = authSession.user.user_metadata || {}
+  const user = await syncLocalUser({
+    email: validatedData.email,
+    firstName: metadata.firstName,
+    lastName: metadata.lastName,
+    phone: metadata.phone,
+  })
 
   // Generate tokens
   const tokens = JWTService.generateTokenPair(user);
-
-  const { passwordHash, ...userWithoutPassword } = user;
 
   res.json({
     success: true,
     message: 'Login successful',
     data: {
-      user: userWithoutPassword,
+      user: sanitizeUser(user),
       token: tokens.accessToken,
       refreshToken: tokens.refreshToken
     }
