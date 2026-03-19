@@ -44,18 +44,13 @@ class ApiClient {
 
   private static resolveBaseURL(): string {
     const configured = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/+$/, '')
-    const isProduction = process.env.NODE_ENV === 'production'
-    const isLocalhost =
-      configured.includes('localhost') || configured.includes('127.0.0.1')
 
-    if (isProduction) {
-      return ''
-    }
-
-    if (configured && (!isProduction || !isLocalhost)) {
+    // Always prefer explicitly configured URL (works in both dev and production)
+    if (configured) {
       return configured
     }
 
+    // Fallback for local development only
     return 'http://localhost:3001'
   }
 
