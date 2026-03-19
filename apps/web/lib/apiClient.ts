@@ -27,12 +27,13 @@ export interface ApiError {
 class ApiClient {
   private client: AxiosInstance
   private baseURL: string
+  private static readonly REQUEST_TIMEOUT_MS = 90000
 
   constructor(baseURL: string = ApiClient.resolveBaseURL()) {
     this.baseURL = baseURL
     this.client = axios.create({
       baseURL: ApiClient.buildApiBaseURL(this.baseURL),
-      timeout: 30000, // 30 seconds
+      timeout: ApiClient.REQUEST_TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -97,6 +98,17 @@ class ApiClient {
         return response
       },
       (error) => {
+        const config = error.config as AxiosRequestConfig & { _retry?: boolean }
+
+        if (
+          config &&
+          !config._retry &&
+          (error.code === 'ECONNABORTED' || (!error.response && error.request))
+        ) {
+          config._retry = true
+          return this.client.request(config)
+        }
+
         // Handle different error types
         if (error.response) {
           // Server responded with error status
@@ -268,7 +280,7 @@ class ApiClient {
       // Network error
       return {
         success: false,
-        error: 'Network error. Please check your connection.',
+        error: 'The server took too long to respond. If Render was sleeping, try again in a few seconds.',
         code: 'NETWORK_ERROR'
       }
     } else {
