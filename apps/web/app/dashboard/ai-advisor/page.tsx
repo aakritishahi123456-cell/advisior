@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Bot, Send, Sparkles, FileText, Calculator, TrendingUp, CreditCard, Lightbulb } from 'lucide-react'
+import { api } from '@/lib/apiClient'
 
 const quickQuestions = [
   { icon: TrendingUp, text: 'Which NEPSE stocks are strong right now?' },
@@ -47,27 +48,65 @@ const chatHistory = [
   },
 ]
 
+type UserMessage = {
+  type: 'user'
+  message: string
+  time: string
+}
+
+type AIMessage = {
+  type: 'ai'
+  message: string
+  time: string
+  insights?: Array<{ title: string; reason: string }>
+  allocations?: Array<{ percentage: number; amount: number; investment: string; reason: string }>
+  recommendation?: string
+  expectedReturn?: string
+}
+
+type ChatMessage = UserMessage | AIMessage
+
 export default function AIAdvisorPage() {
-  const [messages, setMessages] = useState(chatHistory)
+  const [messages, setMessages] = useState<ChatMessage[]>(chatHistory)
   const [inputMessage, setInputMessage] = useState('')
   const [isTyping, setIsTyping] = useState(false)
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputMessage.trim()) return
 
     const newUserMessage = { type: 'user' as const, message: inputMessage, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    setMessages([...messages, newUserMessage])
+    setMessages((prev) => [...prev, newUserMessage])
     setInputMessage('')
     setIsTyping(true)
 
-    setTimeout(() => {
-      setIsTyping(false)
+    try {
+      const response = await api.post<{ answer: string }>('/advisor/chat', {
+        message: newUserMessage.message,
+      })
+
+      if (!response.success || !response.data?.answer) {
+        throw new Error(response.error || 'AI Advisor request failed')
+      }
+
       setMessages(prev => [...prev, {
         type: 'ai',
-        message: 'I\'m analyzing your question. This feature requires backend integration to provide accurate AI responses.',
+        message: response.data.answer,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }])
-    }, 1500)
+    } catch (error: any) {
+      const message =
+        error?.error ||
+        error?.message ||
+        'AI Advisor is unavailable right now. Please try again in a moment.'
+
+      setMessages(prev => [...prev, {
+        type: 'ai',
+        message,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }])
+    } finally {
+      setIsTyping(false)
+    }
   }
 
   const handleQuickQuestion = (question: string) => {

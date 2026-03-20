@@ -6,6 +6,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 
 import authRoutes from './routes/auth.routes'
+import advisorRoutes from './routes/advisor.routes'
 import loanSimulationRoutes from './routes/loan-simulations.routes'
 import { errorHandler } from './middleware/errorHandler'
 
@@ -76,6 +77,7 @@ app.get('/health', healthHandler)
 app.get('/api/v1/health', healthHandler)
 
 app.use('/api/v1/auth', authRoutes)
+app.use('/api/v1/advisor', advisorRoutes)
 app.use('/api/v1/examples/loan-simulations', loanSimulationRoutes)
 
 app.use((req, res) => {
