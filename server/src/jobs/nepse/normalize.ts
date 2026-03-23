@@ -1,4 +1,5 @@
 import { NepseCompanyInput, NepseFinancialInput, NepsePriceInput } from './nepseTypes'
+import { NepseLivePriceInput } from './livePriceTypes'
 import { parseISODate } from './time'
 
 function asString(value: unknown): string | null {
@@ -85,3 +86,27 @@ export function normalizeFinancialsFromDaily(payload: any, businessDateISO: stri
   return financials
 }
 
+export function normalizeLivePrices(payload: any, now: Date = new Date()): NepseLivePriceInput[] {
+  const list = Array.isArray(payload) ? payload : Array.isArray(payload?.content) ? payload.content : []
+
+  const prices: NepseLivePriceInput[] = []
+  for (const row of list) {
+    const symbol = asString(row?.symbol ?? row?.securitySymbol ?? row?.ticker)
+    const price = asNumber(row?.lastTradedPrice ?? row?.ltp ?? row?.closePrice ?? row?.close ?? row?.lastPrice)
+    const change = asNumber(row?.percentageChange ?? row?.percentChange ?? row?.changePercent ?? row?.change)
+
+    if (!symbol || price === null || change === null) {
+      continue
+    }
+
+    prices.push({
+      symbol,
+      price,
+      change,
+      volume: asBigInt(row?.totalTradedQuantity ?? row?.volume ?? row?.quantity),
+      timestamp: now,
+    })
+  }
+
+  return prices
+}

@@ -3,6 +3,7 @@ import { ReportGeneratorController } from '../controllers/reportGenerator.contro
 import { requireAuth, AuthRequest } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { generalLimiter, proLimiter } from '../middleware/rateLimiter.middleware';
+import { checkUsageLimit } from '../middleware/subscription.middleware';
 import { z } from 'zod';
 
 const router = Router();
@@ -83,6 +84,7 @@ router.get('/statistics',
 
 // GET /api/v1/companies/:symbol/reports/:year/pdf - Generate PDF
 router.get('/:year/pdf',
+  checkUsageLimit({ featureKey: 'pdf_download', premiumOnly: true, trackUsage: false }),
   ReportGeneratorController.generatePDF
 );
 

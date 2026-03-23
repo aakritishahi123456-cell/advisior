@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
+import { captureException } from '../config/monitoring'
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -38,6 +39,11 @@ export const errorHandler = (
     stack: err.stack,
     rawMessage,
   });
+  captureException(err, {
+    url: req.url,
+    method: req.method,
+    statusCode,
+  })
 
   // Don't leak error details in production
   const errorResponse = {

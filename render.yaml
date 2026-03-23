@@ -2,6 +2,97 @@ services:
   - type: web
     name: advisior-api
     env: node
-    plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    plan: starter
+    rootDir: .
+    buildCommand: npm install && npm run build --workspace=server
+    startCommand: npm run start --workspace=server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: METRICS_ENABLED
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: KHALTI_SECRET_KEY
+        sync: false
+      - key: ESEWA_MERCHANT_CODE
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: openai
+      - key: AI_CHAT_MODEL
+        value: gpt-4o-mini
+      - key: AI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: AI_RESPONSE_CACHE_ENABLED
+        value: "true"
+      - key: AI_RESPONSE_CACHE_TTL_SECONDS
+        value: "600"
+      - key: AI_MAX_INPUT_TOKENS
+        value: "2000"
+      - key: AI_MAX_OUTPUT_TOKENS
+        value: "1200"
+      - key: VECTOR_BACKEND
+        value: prisma
+      - key: START_HTTP_SERVER
+        value: "true"
+      - key: START_BACKGROUND_WORKERS
+        value: "false"
+  - type: worker
+    name: advisior-ai-worker
+    env: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm install && npm run build --workspace=server
+    startCommand: npm run start:worker --workspace=server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: openai
+      - key: AI_CHAT_MODEL
+        value: gpt-4o-mini
+      - key: AI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: AI_RESPONSE_CACHE_ENABLED
+        value: "true"
+      - key: AI_RESPONSE_CACHE_TTL_SECONDS
+        value: "600"
+      - key: AI_MAX_INPUT_TOKENS
+        value: "2000"
+      - key: AI_MAX_OUTPUT_TOKENS
+        value: "1200"
+      - key: VECTOR_BACKEND
+        value: prisma
+      - key: START_HTTP_SERVER
+        value: "false"
+      - key: START_BACKGROUND_WORKERS
+        value: "true"

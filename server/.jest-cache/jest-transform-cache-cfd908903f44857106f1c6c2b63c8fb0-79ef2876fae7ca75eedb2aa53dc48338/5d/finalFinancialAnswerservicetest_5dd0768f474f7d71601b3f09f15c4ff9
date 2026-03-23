@@ -1,0 +1,83 @@
+36688f9cc1a9e6af594702047ce6f6be
+"use strict";
+
+_getJestObj().mock('../financialDataRetrieval.service', () => ({
+  FinancialDataRetrievalService: {
+    fetchRelevantFinancialData: jest.fn()
+  }
+}));
+_getJestObj().mock('../financialDataAnalysis.service', () => ({
+  FinancialDataAnalysisService: {
+    analyze: jest.fn()
+  }
+}));
+function _getJestObj() {
+  const {
+    jest
+  } = require("@jest/globals");
+  _getJestObj = () => jest;
+  return jest;
+}
+describe('FinalFinancialAnswerService', () => {
+  let FinalFinancialAnswerService;
+  let FinancialDataRetrievalService;
+  let FinancialDataAnalysisService;
+  beforeEach(() => {
+    jest.resetModules();
+    ({
+      FinalFinancialAnswerService
+    } = require('../finalFinancialAnswer.service'));
+    ({
+      FinancialDataRetrievalService
+    } = require('../financialDataRetrieval.service'));
+    ({
+      FinancialDataAnalysisService
+    } = require('../financialDataAnalysis.service'));
+    jest.clearAllMocks();
+  });
+  test('returns explainable final answer with reasoning and sources', async () => {
+    FinancialDataRetrievalService.fetchRelevantFinancialData.mockResolvedValue({
+      company: 'NABIL',
+      data: {
+        revenue: 1000,
+        profit: 200,
+        growth: 10,
+        latest_price: 500,
+        PE_ratio: 15
+      },
+      sources: ['financials_latest', 'nepse_price_data']
+    });
+    FinancialDataAnalysisService.analyze.mockReturnValue({
+      analysis: 'Reported revenue is 1,000. Reported profit is 200. Calculated profit margin is 20%.',
+      strengths: ['The company is profitable based on the provided profit figure of 200.'],
+      risks: ['Growth is negative at -5%.']
+    });
+    const result = await FinalFinancialAnswerService.generate({
+      query: 'Is NABIL a good investment?'
+    });
+    expect(result).toEqual({
+      answer: 'NABIL: Key strengths: The company is profitable based on the provided profit figure of 200. Key risks: Growth is negative at -5%.',
+      reasoning: 'Reported revenue is 1,000. Reported profit is 200. Calculated profit margin is 20%.',
+      sources: ['financials_latest', 'nepse_price_data']
+    });
+  });
+  test('returns INSUFFICIENT DATA when verified analysis is unavailable', async () => {
+    FinancialDataRetrievalService.fetchRelevantFinancialData.mockResolvedValue({
+      company: 'NABIL',
+      data: {
+        revenue: null,
+        profit: null,
+        growth: null,
+        latest_price: null,
+        PE_ratio: null
+      },
+      sources: []
+    });
+    FinancialDataAnalysisService.analyze.mockReturnValue('INSUFFICIENT DATA');
+    const result = await FinalFinancialAnswerService.generate({
+      query: 'Is NABIL a good investment?'
+    });
+    expect(result).toBe('INSUFFICIENT DATA');
+  });
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2V0SmVzdE9iaiIsIm1vY2siLCJGaW5hbmNpYWxEYXRhUmV0cmlldmFsU2VydmljZSIsImZldGNoUmVsZXZhbnRGaW5hbmNpYWxEYXRhIiwiamVzdCIsImZuIiwiRmluYW5jaWFsRGF0YUFuYWx5c2lzU2VydmljZSIsImFuYWx5emUiLCJyZXF1aXJlIiwiZGVzY3JpYmUiLCJGaW5hbEZpbmFuY2lhbEFuc3dlclNlcnZpY2UiLCJiZWZvcmVFYWNoIiwicmVzZXRNb2R1bGVzIiwiY2xlYXJBbGxNb2NrcyIsInRlc3QiLCJtb2NrUmVzb2x2ZWRWYWx1ZSIsImNvbXBhbnkiLCJkYXRhIiwicmV2ZW51ZSIsInByb2ZpdCIsImdyb3d0aCIsImxhdGVzdF9wcmljZSIsIlBFX3JhdGlvIiwic291cmNlcyIsIm1vY2tSZXR1cm5WYWx1ZSIsImFuYWx5c2lzIiwic3RyZW5ndGhzIiwicmlza3MiLCJyZXN1bHQiLCJnZW5lcmF0ZSIsInF1ZXJ5IiwiZXhwZWN0IiwidG9FcXVhbCIsImFuc3dlciIsInJlYXNvbmluZyIsInRvQmUiXSwic291cmNlcyI6WyJmaW5hbEZpbmFuY2lhbEFuc3dlci5zZXJ2aWNlLnRlc3QudHMiXSwic291cmNlc0NvbnRlbnQiOlsiamVzdC5tb2NrKCcuLi9maW5hbmNpYWxEYXRhUmV0cmlldmFsLnNlcnZpY2UnLCAoKSA9PiAoe1xuICBGaW5hbmNpYWxEYXRhUmV0cmlldmFsU2VydmljZToge1xuICAgIGZldGNoUmVsZXZhbnRGaW5hbmNpYWxEYXRhOiBqZXN0LmZuKCksXG4gIH0sXG59KSlcblxuamVzdC5tb2NrKCcuLi9maW5hbmNpYWxEYXRhQW5hbHlzaXMuc2VydmljZScsICgpID0+ICh7XG4gIEZpbmFuY2lhbERhdGFBbmFseXNpc1NlcnZpY2U6IHtcbiAgICBhbmFseXplOiBqZXN0LmZuKCksXG4gIH0sXG59KSlcblxuZGVzY3JpYmUoJ0ZpbmFsRmluYW5jaWFsQW5zd2VyU2VydmljZScsICgpID0+IHtcbiAgbGV0IEZpbmFsRmluYW5jaWFsQW5zd2VyU2VydmljZTogYW55XG4gIGxldCBGaW5hbmNpYWxEYXRhUmV0cmlldmFsU2VydmljZTogYW55XG4gIGxldCBGaW5hbmNpYWxEYXRhQW5hbHlzaXNTZXJ2aWNlOiBhbnlcblxuICBiZWZvcmVFYWNoKCgpID0+IHtcbiAgICBqZXN0LnJlc2V0TW9kdWxlcygpXG4gICAgOyh7IEZpbmFsRmluYW5jaWFsQW5zd2VyU2VydmljZSB9ID0gcmVxdWlyZSgnLi4vZmluYWxGaW5hbmNpYWxBbnN3ZXIuc2VydmljZScpKVxuICAgIDsoeyBGaW5hbmNpYWxEYXRhUmV0cmlldmFsU2VydmljZSB9ID0gcmVxdWlyZSgnLi4vZmluYW5jaWFsRGF0YVJldHJpZXZhbC5zZXJ2aWNlJykpXG4gICAgOyh7IEZpbmFuY2lhbERhdGFBbmFseXNpc1NlcnZpY2UgfSA9IHJlcXVpcmUoJy4uL2ZpbmFuY2lhbERhdGFBbmFseXNpcy5zZXJ2aWNlJykpXG4gICAgamVzdC5jbGVhckFsbE1vY2tzKClcbiAgfSlcblxuICB0ZXN0KCdyZXR1cm5zIGV4cGxhaW5hYmxlIGZpbmFsIGFuc3dlciB3aXRoIHJlYXNvbmluZyBhbmQgc291cmNlcycsIGFzeW5jICgpID0+IHtcbiAgICBGaW5hbmNpYWxEYXRhUmV0cmlldmFsU2VydmljZS5mZXRjaFJlbGV2YW50RmluYW5jaWFsRGF0YS5tb2NrUmVzb2x2ZWRWYWx1ZSh7XG4gICAgICBjb21wYW55OiAnTkFCSUwnLFxuICAgICAgZGF0YToge1xuICAgICAgICByZXZlbnVlOiAxMDAwLFxuICAgICAgICBwcm9maXQ6IDIwMCxcbiAgICAgICAgZ3Jvd3RoOiAxMCxcbiAgICAgICAgbGF0ZXN0X3ByaWNlOiA1MDAsXG4gICAgICAgIFBFX3JhdGlvOiAxNSxcbiAgICAgIH0sXG4gICAgICBzb3VyY2VzOiBbJ2ZpbmFuY2lhbHNfbGF0ZXN0JywgJ25lcHNlX3ByaWNlX2RhdGEnXSxcbiAgICB9KVxuICAgIEZpbmFuY2lhbERhdGFBbmFseXNpc1NlcnZpY2UuYW5hbHl6ZS5tb2NrUmV0dXJuVmFsdWUoe1xuICAgICAgYW5hbHlzaXM6ICdSZXBvcnRlZCByZXZlbnVlIGlzIDEsMDAwLiBSZXBvcnRlZCBwcm9maXQgaXMgMjAwLiBDYWxjdWxhdGVkIHByb2ZpdCBtYXJnaW4gaXMgMjAlLicsXG4gICAgICBzdHJlbmd0aHM6IFsnVGhlIGNvbXBhbnkgaXMgcHJvZml0YWJsZSBiYXNlZCBvbiB0aGUgcHJvdmlkZWQgcHJvZml0IGZpZ3VyZSBvZiAyMDAuJ10sXG4gICAgICByaXNrczogWydHcm93dGggaXMgbmVnYXRpdmUgYXQgLTUlLiddLFxuICAgIH0pXG5cbiAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBGaW5hbEZpbmFuY2lhbEFuc3dlclNlcnZpY2UuZ2VuZXJhdGUoeyBxdWVyeTogJ0lzIE5BQklMIGEgZ29vZCBpbnZlc3RtZW50PycgfSlcblxuICAgIGV4cGVjdChyZXN1bHQpLnRvRXF1YWwoe1xuICAgICAgYW5zd2VyOlxuICAgICAgICAnTkFCSUw6IEtleSBzdHJlbmd0aHM6IFRoZSBjb21wYW55IGlzIHByb2ZpdGFibGUgYmFzZWQgb24gdGhlIHByb3ZpZGVkIHByb2ZpdCBmaWd1cmUgb2YgMjAwLiBLZXkgcmlza3M6IEdyb3d0aCBpcyBuZWdhdGl2ZSBhdCAtNSUuJyxcbiAgICAgIHJlYXNvbmluZzpcbiAgICAgICAgJ1JlcG9ydGVkIHJldmVudWUgaXMgMSwwMDAuIFJlcG9ydGVkIHByb2ZpdCBpcyAyMDAuIENhbGN1bGF0ZWQgcHJvZml0IG1hcmdpbiBpcyAyMCUuJyxcbiAgICAgIHNvdXJjZXM6IFsnZmluYW5jaWFsc19sYXRlc3QnLCAnbmVwc2VfcHJpY2VfZGF0YSddLFxuICAgIH0pXG4gIH0pXG5cbiAgdGVzdCgncmV0dXJucyBJTlNVRkZJQ0lFTlQgREFUQSB3aGVuIHZlcmlmaWVkIGFuYWx5c2lzIGlzIHVuYXZhaWxhYmxlJywgYXN5bmMgKCkgPT4ge1xuICAgIEZpbmFuY2lhbERhdGFSZXRyaWV2YWxTZXJ2aWNlLmZldGNoUmVsZXZhbnRGaW5hbmNpYWxEYXRhLm1vY2tSZXNvbHZlZFZhbHVlKHtcbiAgICAgIGNvbXBhbnk6ICdOQUJJTCcsXG4gICAgICBkYXRhOiB7XG4gICAgICAgIHJldmVudWU6IG51bGwsXG4gICAgICAgIHByb2ZpdDogbnVsbCxcbiAgICAgICAgZ3Jvd3RoOiBudWxsLFxuICAgICAgICBsYXRlc3RfcHJpY2U6IG51bGwsXG4gICAgICAgIFBFX3JhdGlvOiBudWxsLFxuICAgICAgfSxcbiAgICAgIHNvdXJjZXM6IFtdLFxuICAgIH0pXG4gICAgRmluYW5jaWFsRGF0YUFuYWx5c2lzU2VydmljZS5hbmFseXplLm1vY2tSZXR1cm5WYWx1ZSgnSU5TVUZGSUNJRU5UIERBVEEnKVxuXG4gICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgRmluYWxGaW5hbmNpYWxBbnN3ZXJTZXJ2aWNlLmdlbmVyYXRlKHsgcXVlcnk6ICdJcyBOQUJJTCBhIGdvb2QgaW52ZXN0bWVudD8nIH0pXG5cbiAgICBleHBlY3QocmVzdWx0KS50b0JlKCdJTlNVRkZJQ0lFTlQgREFUQScpXG4gIH0pXG59KVxuIl0sIm1hcHBpbmdzIjoiOztBQUFBQSxXQUFBLEdBQUtDLElBQUksQ0FBQyxtQ0FBbUMsRUFBRSxPQUFPO0VBQ3BEQyw2QkFBNkIsRUFBRTtJQUM3QkMsMEJBQTBCLEVBQUVDLElBQUksQ0FBQ0MsRUFBRSxDQUFDO0VBQ3RDO0FBQ0YsQ0FBQyxDQUFDLENBQUM7QUFFSEwsV0FBQSxHQUFLQyxJQUFJLENBQUMsa0NBQWtDLEVBQUUsT0FBTztFQUNuREssNEJBQTRCLEVBQUU7SUFDNUJDLE9BQU8sRUFBRUgsSUFBSSxDQUFDQyxFQUFFLENBQUM7RUFDbkI7QUFDRixDQUFDLENBQUMsQ0FBQztBQUFBLFNBQUFMLFlBQUE7RUFBQTtJQUFBSTtFQUFBLElBQUFJLE9BQUE7RUFBQVIsV0FBQSxHQUFBQSxDQUFBLEtBQUFJLElBQUE7RUFBQSxPQUFBQSxJQUFBO0FBQUE7QUFFSEssUUFBUSxDQUFDLDZCQUE2QixFQUFFLE1BQU07RUFDNUMsSUFBSUMsMkJBQWdDO0VBQ3BDLElBQUlSLDZCQUFrQztFQUN0QyxJQUFJSSw0QkFBaUM7RUFFckNLLFVBQVUsQ0FBQyxNQUFNO0lBQ2ZQLElBQUksQ0FBQ1EsWUFBWSxDQUFDLENBQUM7SUFDbEIsQ0FBQztNQUFFRjtJQUE0QixDQUFDLEdBQUdGLE9BQU8sQ0FBQyxpQ0FBaUMsQ0FBQztJQUM3RSxDQUFDO01BQUVOO0lBQThCLENBQUMsR0FBR00sT0FBTyxDQUFDLG1DQUFtQyxDQUFDO0lBQ2pGLENBQUM7TUFBRUY7SUFBNkIsQ0FBQyxHQUFHRSxPQUFPLENBQUMsa0NBQWtDLENBQUM7SUFDaEZKLElBQUksQ0FBQ1MsYUFBYSxDQUFDLENBQUM7RUFDdEIsQ0FBQyxDQUFDO0VBRUZDLElBQUksQ0FBQyw2REFBNkQsRUFBRSxZQUFZO0lBQzlFWiw2QkFBNkIsQ0FBQ0MsMEJBQTBCLENBQUNZLGlCQUFpQixDQUFDO01BQ3pFQyxPQUFPLEVBQUUsT0FBTztNQUNoQkMsSUFBSSxFQUFFO1FBQ0pDLE9BQU8sRUFBRSxJQUFJO1FBQ2JDLE1BQU0sRUFBRSxHQUFHO1FBQ1hDLE1BQU0sRUFBRSxFQUFFO1FBQ1ZDLFlBQVksRUFBRSxHQUFHO1FBQ2pCQyxRQUFRLEVBQUU7TUFDWixDQUFDO01BQ0RDLE9BQU8sRUFBRSxDQUFDLG1CQUFtQixFQUFFLGtCQUFrQjtJQUNuRCxDQUFDLENBQUM7SUFDRmpCLDRCQUE0QixDQUFDQyxPQUFPLENBQUNpQixlQUFlLENBQUM7TUFDbkRDLFFBQVEsRUFBRSxxRkFBcUY7TUFDL0ZDLFNBQVMsRUFBRSxDQUFDLHVFQUF1RSxDQUFDO01BQ3BGQyxLQUFLLEVBQUUsQ0FBQyw0QkFBNEI7SUFDdEMsQ0FBQyxDQUFDO0lBRUYsTUFBTUMsTUFBTSxHQUFHLE1BQU1sQiwyQkFBMkIsQ0FBQ21CLFFBQVEsQ0FBQztNQUFFQyxLQUFLLEVBQUU7SUFBOEIsQ0FBQyxDQUFDO0lBRW5HQyxNQUFNLENBQUNILE1BQU0sQ0FBQyxDQUFDSSxPQUFPLENBQUM7TUFDckJDLE1BQU0sRUFDSixtSUFBbUk7TUFDcklDLFNBQVMsRUFDUCxxRkFBcUY7TUFDdkZYLE9BQU8sRUFBRSxDQUFDLG1CQUFtQixFQUFFLGtCQUFrQjtJQUNuRCxDQUFDLENBQUM7RUFDSixDQUFDLENBQUM7RUFFRlQsSUFBSSxDQUFDLGlFQUFpRSxFQUFFLFlBQVk7SUFDbEZaLDZCQUE2QixDQUFDQywwQkFBMEIsQ0FBQ1ksaUJBQWlCLENBQUM7TUFDekVDLE9BQU8sRUFBRSxPQUFPO01BQ2hCQyxJQUFJLEVBQUU7UUFDSkMsT0FBTyxFQUFFLElBQUk7UUFDYkMsTUFBTSxFQUFFLElBQUk7UUFDWkMsTUFBTSxFQUFFLElBQUk7UUFDWkMsWUFBWSxFQUFFLElBQUk7UUFDbEJDLFFBQVEsRUFBRTtNQUNaLENBQUM7TUFDREMsT0FBTyxFQUFFO0lBQ1gsQ0FBQyxDQUFDO0lBQ0ZqQiw0QkFBNEIsQ0FBQ0MsT0FBTyxDQUFDaUIsZUFBZSxDQUFDLG1CQUFtQixDQUFDO0lBRXpFLE1BQU1JLE1BQU0sR0FBRyxNQUFNbEIsMkJBQTJCLENBQUNtQixRQUFRLENBQUM7TUFBRUMsS0FBSyxFQUFFO0lBQThCLENBQUMsQ0FBQztJQUVuR0MsTUFBTSxDQUFDSCxNQUFNLENBQUMsQ0FBQ08sSUFBSSxDQUFDLG1CQUFtQixDQUFDO0VBQzFDLENBQUMsQ0FBQztBQUNKLENBQUMsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

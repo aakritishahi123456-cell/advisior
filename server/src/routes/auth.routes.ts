@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
 import { PasswordService } from '../utils/password';
 import { JWTService } from '../utils/jwt';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { requireAuth, AuthRequest } from '../middleware/auth.middleware';
 import { loginLimiter, registerLimiter, refreshLimiter } from '../middleware/rateLimiter.middleware';
 import { supabaseAdmin, supabaseAuthClient } from '../lib/supabase';
+import prisma from '../lib/prisma';
+import { productAnalyticsService, PRODUCT_EVENTS } from '../services/productAnalytics.service';
 
 const router = Router();
-const prisma = new PrismaClient();
 const optionalTrimmedString = z
   .string()
   .trim()
@@ -74,7 +74,7 @@ const syncLocalUser = async (input: {
       firstName: input.firstName,
       lastName: input.lastName,
       phone: input.phone,
-      passwordHash: '__supabase_managed__',
+      password: '__supabase_managed__',
       role: 'FREE',
     },
   })
@@ -139,6 +139,16 @@ router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
       phone: validatedData.phone,
+    })
+    await productAnalyticsService.trackEvent({
+      userId: user.id,
+      eventName: PRODUCT_EVENTS.SIGNUP,
+      category: 'acquisition',
+      properties: {
+        email: user.email,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
     })
     const tokens = JWTService.generateTokenPair(user)
 

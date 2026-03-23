@@ -15,6 +15,7 @@ import { loanRouter } from './routes/loan';
 import { companyRouter } from './routes/company';
 import { reportRouter } from './routes/report';
 import { subscriptionRouter } from './routes/subscription';
+import aiRoutes from './routes/ai.routes';
 
 // Initialize Prisma Client
 export const prisma = new PrismaClient({
@@ -76,6 +77,7 @@ app.use('/api/v1/loans', loanRouter);
 app.use('/api/v1/companies', companyRouter);
 app.use('/api/v1/reports', reportRouter);
 app.use('/api/v1/subscriptions', subscriptionRouter);
+app.use('/api/v1/ai', aiRoutes);
 
 // Error handling middleware (must be last)
 app.use(notFoundHandler);

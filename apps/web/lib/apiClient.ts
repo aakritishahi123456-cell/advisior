@@ -347,7 +347,8 @@ export const endpoints = {
   loans: {
     list: '/loans',
     create: '/loans',
-    simulate: '/loans/simulate',
+    simulate: '/loan/simulate',
+    recommendations: '/loan/recommendations',
     statistics: '/loans/statistics',
     byId: (id: string) => `/loans/${id}`,
     update: (id: string) => `/loans/${id}`,
@@ -384,14 +385,29 @@ export const endpoints = {
   },
   // Subscriptions
   subscriptions: {
-    plans: '/subscriptions/plans',
-    current: '/subscriptions/current',
-    upgrade: '/subscriptions/upgrade',
-    downgrade: '/subscriptions/downgrade',
-    cancel: '/subscriptions/cancel',
-    history: '/subscriptions/history',
-    reactivate: '/subscriptions/reactivate',
-    updatePayment: '/subscriptions/update-payment',
+    current: '/subscription/status',
+    upgrade: '/subscription/upgrade',
+    plans: '/subscription/status',
+    downgrade: '/subscription/status',
+    cancel: '/subscription/status',
+    history: '/payment/transactions',
+    reactivate: '/subscription/status',
+    updatePayment: '/subscription/status',
+  },
+  payments: {
+    providers: '/payment/providers',
+    initiate: '/payment/initiate',
+    verify: '/payment/verify',
+    transactions: '/payment/transactions',
+    transactionById: (transactionId: string) => `/payment/transactions/${transactionId}`,
+  },
+  referral: {
+    status: '/referral/status',
+    use: '/referral/use',
+  },
+  analytics: {
+    event: '/analytics/event',
+    dashboard: '/analytics/dashboard',
   },
   // AI Analysis
   ai: {
@@ -429,12 +445,19 @@ export interface User {
 }
 
 export interface Subscription {
-  id: string
+  id?: string
   plan: 'FREE' | 'PRO'
-  status: 'ACTIVE' | 'INACTIVE' | 'CANCELLED'
-  startDate: string
+  status?: 'ACTIVE' | 'INACTIVE' | 'CANCELLED' | 'EXPIRED'
+  isActive: boolean
+  startDate?: string
   endDate?: string
-  autoRenew: boolean
+  autoRenew?: boolean
+  expiresAt?: string | null
+  reportsThisMonth?: {
+    used: number
+    limit: number | null
+    remaining: number | null
+  }
 }
 
 export interface Company {

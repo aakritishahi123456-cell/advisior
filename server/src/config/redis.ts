@@ -25,13 +25,13 @@ export const connectRedis = async (): Promise<Redis> => {
     });
 
     redis.on('error', (err) => {
-      logger.error('Redis connection error:', err);
+      logger.error(err, { component: 'redis', event: 'redis_connection_error' });
     });
 
     await redis.connect();
     return redis;
   } catch (error) {
-    logger.error('Failed to connect to Redis:', error);
+    logger.error(error as Error, { component: 'redis', event: 'redis_connection_failed' });
     throw error;
   }
 };

@@ -1,10 +1,10 @@
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 
 export const requestLogger = (req, res, next) => {
   const start = Date.now();
   
   // Record request
-  logger.info({
+  logger.info('request_received', {
     method: req.method,
     url: req.originalUrl,
     ip: req.ip || req.connection.remoteAddress,
@@ -17,7 +17,7 @@ export const requestLogger = (req, res, next) => {
     const duration = Date.now() - start;
     const logLevel = res.statusCode >= 400 ? 'error' : 'info';
     
-    logger[logLevel]({
+    logger[logLevel]('request_completed', {
       method: req.method,
       url: req.originalUrl,
       statusCode: res.statusCode,

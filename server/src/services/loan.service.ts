@@ -1,7 +1,9 @@
-import { PrismaClient, Loan, LoanStatus, LoanType } from '@prisma/client';
+import { Loan, LoanStatus, LoanType } from '@prisma/client';
 import { LoanRepository } from '../repositories/loan.repository';
 import { createError } from '../middleware/errorHandler';
 import logger from '../utils/logger';
+import prisma from '../lib/prisma';
+import { normalizeLoanType } from './loanProducts.service';
 
 export interface CreateLoanData {
   principal: number;
@@ -34,6 +36,41 @@ export interface LoanSimulationResult {
   schedule: AmortizationSchedule[];
 }
 
+export type LoanRecommendationRanking = 'lowest_total_cost' | 'lowest_emi';
+
+export interface LoanMarketplaceSimulationInput {
+  loanAmount: number;
+  tenure: number;
+  loanType?: string;
+  ranking?: LoanRecommendationRanking;
+  limit?: number;
+}
+
+export interface LoanRecommendationItem {
+  bankName: string;
+  interestRate: number;
+  tenure: number;
+  processingFee: number;
+  emi: number;
+  totalInterest: number;
+  totalCost: number;
+  rankingScore: number;
+  sourceUrl: string | null;
+  lastUpdated: string;
+}
+
+export interface LoanMarketplaceSimulationResult {
+  loanAmount: number;
+  tenure: number;
+  ranking: LoanRecommendationRanking;
+  bestLoanSuggestions: LoanRecommendationItem[];
+  summary: {
+    bestByTotalCost: LoanRecommendationItem | null;
+    bestByEMI: LoanRecommendationItem | null;
+  };
+  savedSimulationId: string | null;
+}
+
 export interface LoanStatistics {
   totalLoans: number;
   totalAmount: number;
@@ -43,8 +80,6 @@ export interface LoanStatistics {
 }
 
 export class LoanService {
-  private static prisma = new PrismaClient();
-
   static async createLoan(userId: string, loanData: CreateLoanData): Promise<Loan> {
     try {
       logger.info({ userId, action: 'create_loan', data: loanData });
@@ -215,9 +250,120 @@ export class LoanService {
       
       return result;
     } catch (error) {
+      if ((error as { statusCode?: number })?.statusCode) {
+        throw error;
+      }
       logger.error({ error, simulationData, action: 'loan_simulation_failed' });
       throw createError('Failed to simulate loan', 500);
     }
+  }
+
+  static async simulateMarketplaceLoan(
+    input: LoanMarketplaceSimulationInput,
+    userId?: string
+  ): Promise<LoanMarketplaceSimulationResult> {
+    const normalized = this.normalizeMarketplaceInput(input);
+
+    try {
+      const products = await prisma.loanProduct.findMany({
+        where: {
+          loanType: {
+            equals: normalized.loanType,
+            mode: 'insensitive',
+          },
+          OR: [
+            { maxLoanAmount: null },
+            { maxLoanAmount: { gte: normalized.loanAmount } },
+          ],
+          AND: [
+            {
+              OR: [
+                { loanTerm: null },
+                { loanTerm: { gte: normalized.tenure } },
+              ],
+            },
+          ],
+        },
+        orderBy: [
+          { interestRate: 'asc' },
+          { processingFee: 'asc' },
+          { bankName: 'asc' },
+        ],
+        take: Math.max(normalized.limit * 3, normalized.limit),
+      });
+
+      const recommendations = products
+        .map((product) => {
+          const simulation = this.calculateEMIQuickBreakdown(
+            normalized.loanAmount,
+            product.interestRate,
+            normalized.tenure
+          );
+          const processingFee = Number(product.processingFee ?? 0);
+          const totalCost = Number((simulation.totalPayment + processingFee).toFixed(2));
+
+          return {
+            bankName: product.bankName,
+            interestRate: Number(product.interestRate),
+            tenure: normalized.tenure,
+            processingFee,
+            emi: simulation.emi,
+            totalInterest: simulation.totalInterest,
+            totalCost,
+            rankingScore:
+              normalized.ranking === 'lowest_emi' ? simulation.emi : totalCost,
+            sourceUrl: product.sourceUrl,
+            lastUpdated: product.lastUpdated.toISOString(),
+          } satisfies LoanRecommendationItem;
+        })
+        .sort((left, right) => {
+          if (normalized.ranking === 'lowest_emi') {
+            return left.emi - right.emi || left.totalCost - right.totalCost || left.bankName.localeCompare(right.bankName);
+          }
+
+          return left.totalCost - right.totalCost || left.emi - right.emi || left.bankName.localeCompare(right.bankName);
+        })
+        .slice(0, normalized.limit);
+
+      if (recommendations.length === 0) {
+        throw this.marketplaceError('No matching loan products found for the selected amount and tenure', 404);
+      }
+
+      const savedSimulationId = userId
+        ? await this.saveLoanMarketplaceSimulation(
+            userId,
+            normalized.loanAmount,
+            recommendations[0].interestRate,
+            normalized.tenure
+          )
+        : null;
+
+      return {
+        loanAmount: normalized.loanAmount,
+        tenure: normalized.tenure,
+        ranking: normalized.ranking,
+        bestLoanSuggestions: recommendations,
+        summary: {
+          bestByTotalCost: [...recommendations].sort((a, b) => a.totalCost - b.totalCost || a.emi - b.emi)[0] ?? null,
+          bestByEMI: [...recommendations].sort((a, b) => a.emi - b.emi || a.totalCost - b.totalCost)[0] ?? null,
+        },
+        savedSimulationId,
+      };
+    } catch (error) {
+      if ((error as { statusCode?: number })?.statusCode) {
+        throw error;
+      }
+
+      logger.error({ error, input, userId, action: 'loan_marketplace_simulation_failed' });
+      throw createError('Failed to simulate loan marketplace options', 500);
+    }
+  }
+
+  static async getLoanRecommendations(
+    input: LoanMarketplaceSimulationInput
+  ): Promise<LoanRecommendationItem[]> {
+    const result = await this.simulateMarketplaceLoan(input);
+    return result.bestLoanSuggestions;
   }
 
   static async getLoanStatistics(userId: string): Promise<LoanStatistics> {
@@ -344,6 +490,44 @@ export class LoanService {
     }
   }
 
+  private static normalizeMarketplaceInput(input: LoanMarketplaceSimulationInput): Required<LoanMarketplaceSimulationInput> & { loanType: string } {
+    const loanAmount = Number(input.loanAmount);
+    const tenure = Number(input.tenure);
+    const ranking = input.ranking ?? 'lowest_total_cost';
+    const limit = input.limit ?? 5;
+
+    if (!Number.isFinite(loanAmount) || loanAmount <= 0) {
+      throw this.marketplaceError('Loan amount must be greater than 0', 400);
+    }
+
+    if (!Number.isFinite(tenure) || tenure <= 0) {
+      throw this.marketplaceError('Tenure must be greater than 0', 400);
+    }
+
+    if (tenure > 600) {
+      throw this.marketplaceError('Tenure is too long', 400);
+    }
+
+    if (limit <= 0 || limit > 20) {
+      throw this.marketplaceError('Recommendation limit must be between 1 and 20', 400);
+    }
+
+    let loanType = 'HOME';
+    try {
+      loanType = normalizeLoanType(input.loanType ?? 'HOME');
+    } catch {
+      throw this.marketplaceError('Unsupported loan type', 400);
+    }
+
+    return {
+      loanAmount,
+      tenure,
+      loanType,
+      ranking,
+      limit,
+    };
+  }
+
   private static async calculateEMI(principal: number, annualRate: number, tenureMonths: number): Promise<LoanSimulationResult> {
     // Handle edge case: zero interest rate
     if (annualRate === 0) {
@@ -383,6 +567,70 @@ export class LoanService {
       tenure: tenureMonths,
       schedule
     };
+  }
+
+  private static calculateEMIQuickBreakdown(principal: number, annualRate: number, tenureMonths: number) {
+    if (annualRate === 0) {
+      const emi = Number((principal / tenureMonths).toFixed(2));
+      return {
+        emi,
+        totalPayment: Number(principal.toFixed(2)),
+        totalInterest: 0,
+      };
+    }
+
+    const monthlyRate = annualRate / 12 / 100;
+    const emi =
+      (principal * monthlyRate * Math.pow(1 + monthlyRate, tenureMonths)) /
+      (Math.pow(1 + monthlyRate, tenureMonths) - 1);
+    const totalPayment = emi * tenureMonths;
+
+    return {
+      emi: Number(emi.toFixed(2)),
+      totalPayment: Number(totalPayment.toFixed(2)),
+      totalInterest: Number((totalPayment - principal).toFixed(2)),
+    };
+  }
+
+  private static async saveLoanMarketplaceSimulation(
+    userId: string,
+    amount: number,
+    rate: number,
+    tenure: number
+  ): Promise<string> {
+    const simulation = this.calculateEMIQuickBreakdown(amount, rate, tenure);
+    const saved = await prisma.loanSimulation.create({
+      data: {
+        userId,
+        amount,
+        rate,
+        tenure,
+        emi: simulation.emi,
+        totalInterest: simulation.totalInterest,
+        totalPayment: simulation.totalPayment,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    logger.info({
+      userId,
+      amount,
+      rate,
+      tenure,
+      loanSimulationId: saved.id,
+      action: 'loan_marketplace_simulation_saved',
+    });
+
+    return saved.id;
+  }
+
+  private static marketplaceError(message: string, statusCode: number) {
+    const error = new Error(message) as Error & { statusCode: number; isOperational: boolean };
+    error.statusCode = statusCode;
+    error.isOperational = true;
+    return error;
   }
 
   private static generateAmortizationSchedule(

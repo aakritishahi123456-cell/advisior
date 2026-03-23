@@ -1,32 +1,37 @@
-FROM node:18-alpine
-
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy package files
+RUN apk add --no-cache libc6-compat
+
 COPY package*.json ./
+COPY server/package*.json ./server/
 COPY packages/shared-types/package*.json ./packages/shared-types/
 
-# Install dependencies
-RUN npm ci --only=production
+RUN npm ci
 
-# Copy source code
-COPY . .
+COPY server ./server
+COPY packages/shared-types ./packages/shared-types
 
-# Build shared types first
 RUN npm run build --workspace=packages/shared-types
+RUN npm run db:generate --workspace=server
+RUN npm run build --workspace=server
 
-# Generate Prisma client
-RUN npx prisma generate
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 
-# Build the application
-RUN npm run build
+RUN apk add --no-cache curl
 
-# Expose port
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/server/package*.json ./server/
+COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/server/prisma ./server/prisma
+COPY --from=builder /app/packages/shared-types ./packages/shared-types
+
 EXPOSE 3001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://localhost:3001/health || exit 1
 
-# Start the application
-CMD ["npm", "start"]
+CMD ["node", "server/dist/index.js"]

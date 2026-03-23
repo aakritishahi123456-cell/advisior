@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { LoanController } from '../controllers/loan.controller';
 import { LoanProductsController } from '../controllers/loanProducts.controller';
-import { requireAuth, requirePro, AuthRequest } from '../middleware/auth.middleware';
+import { requireAuth, requirePro, optionalAuth } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { 
   createLoanSchema, 
   updateLoanSchema, 
   loanSimulationSchema, 
+  loanMarketplaceSimulationSchema,
+  loanRecommendationsQuerySchema,
   loanQuerySchema, 
   loanIdSchema 
 } from '../validators/loan.validator';
@@ -21,6 +23,7 @@ router.use((req, res, next) => {
   if (
     req.path === '/simulate' ||
     req.path === '/simulate/schedule' ||
+    (req.method === 'GET' && req.path === '/recommendations') ||
     (req.method === 'GET' && req.path === '/compare')
   ) {
     return next(); // Skip authentication for simulation endpoints
@@ -33,9 +36,18 @@ router.use(apiRateLimit());
 
 // POST /api/v1/loans/simulate - Simulate loan calculation (no authentication required)
 router.post('/simulate', 
+  optionalAuth,
   freeLimiter,
-  validateRequest({ body: loanSimulationSchema }),
+  validateRequest({ body: loanMarketplaceSimulationSchema }),
   LoanController.simulateLoan
+);
+
+// GET /api/v1/loans/recommendations - Ranked marketplace recommendations
+router.get('/recommendations',
+  optionalAuth,
+  freeLimiter,
+  validateRequest({ query: loanRecommendationsQuerySchema }),
+  LoanController.getLoanRecommendations
 );
 
 // POST /api/v1/loans/simulate/schedule - Simulate loan with amortization schedule

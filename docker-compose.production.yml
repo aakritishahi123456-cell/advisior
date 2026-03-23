@@ -1,114 +1,142 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: finsathi-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-finsathi}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME:-finsathi}
+      POSTGRES_USER: ${POSTGRES_USER:-finsathi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-finsathi}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
     networks:
       - finsathi-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-finsathi}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finsathi}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Redis for caching & sessions
   redis:
     image: redis:7-alpine
     container_name: finsathi-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
       - finsathi-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
 
-  # ChromaDB Vector Database
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: finsathi-chromadb
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-    networks:
-      - finsathi-network
-    environment:
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=FALSE
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Backend API Server
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     container_name: finsathi-server
     restart: unless-stopped
     ports:
       - "${SERVER_PORT:-3001}:3001"
     environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://${DB_USER:-finsathi}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-finsathi}
-      - REDIS_URL=redis://redis:6379
-      - CHROMA_URL=http://chromadb:8000
-      - JWT_SECRET=${JWT_SECRET}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - KHALTI_SECRET_KEY=${KHALTI_SECRET_KEY}
-      - ESEWA_MERCHANT_CODE=${ESEWA_MERCHANT_CODE}
+      NODE_ENV: production
+      PORT: 3001
+      TRUST_PROXY: 1
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finsathi}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-finsathi}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      FRONTEND_URL: ${FRONTEND_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_DIR: /app/logs
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      AUTH_RATE_LIMIT_MAX_REQUESTS: ${AUTH_RATE_LIMIT_MAX_REQUESTS:-5}
+      LOGIN_RATE_LIMIT_MAX_REQUESTS: ${LOGIN_RATE_LIMIT_MAX_REQUESTS:-3}
+      REGISTER_RATE_LIMIT_MAX_REQUESTS: ${REGISTER_RATE_LIMIT_MAX_REQUESTS:-3}
+      METRICS_ENABLED: "true"
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_ENVIRONMENT: production
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-4o-mini}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-text-embedding-3-small}
+      LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL}
+      AI_MAX_INPUT_TOKENS: ${AI_MAX_INPUT_TOKENS:-2000}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-1200}
+      AI_RESPONSE_CACHE_ENABLED: ${AI_RESPONSE_CACHE_ENABLED:-true}
+      AI_RESPONSE_CACHE_TTL_SECONDS: ${AI_RESPONSE_CACHE_TTL_SECONDS:-600}
+      VECTOR_BACKEND: ${VECTOR_BACKEND:-prisma}
+      START_HTTP_SERVER: "true"
+      START_BACKGROUND_WORKERS: "false"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      KHALTI_SECRET_KEY: ${KHALTI_SECRET_KEY}
+      ESEWA_MERCHANT_CODE: ${ESEWA_MERCHANT_CODE}
+      ESEWA_SECRET_KEY: ${ESEWA_SECRET_KEY}
+    volumes:
+      - server_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      chromadb:
-        condition: service_healthy
     networks:
       - finsathi-network
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Frontend Web App
-  web:
+  worker:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
-    container_name: finsathi-web
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: finsathi-worker
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-3000}:3000"
+    command: npm run start:worker --workspace=server
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
-      - NODE_ENV=production
+      NODE_ENV: production
+      PORT: 3001
+      TRUST_PROXY: 1
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finsathi}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-finsathi}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      FRONTEND_URL: ${FRONTEND_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_DIR: /app/logs
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-4o-mini}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-text-embedding-3-small}
+      LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL}
+      LOCAL_LLM_MODEL: ${LOCAL_LLM_MODEL}
+      AI_MAX_INPUT_TOKENS: ${AI_MAX_INPUT_TOKENS:-2000}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-1200}
+      AI_RESPONSE_CACHE_ENABLED: ${AI_RESPONSE_CACHE_ENABLED:-true}
+      AI_RESPONSE_CACHE_TTL_SECONDS: ${AI_RESPONSE_CACHE_TTL_SECONDS:-600}
+      VECTOR_BACKEND: ${VECTOR_BACKEND:-prisma}
+      START_HTTP_SERVER: "false"
+      START_BACKGROUND_WORKERS: "true"
+    volumes:
+      - server_logs:/app/logs
     depends_on:
-      - server
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - finsathi-network
 
-  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: finsathi-nginx
@@ -121,11 +149,9 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - server
-      - web
     networks:
       - finsathi-network
 
-  # Prometheus for monitoring
   prometheus:
     image: prom/prometheus:latest
     container_name: finsathi-prometheus
@@ -138,10 +164,13 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - server
+      - postgres-exporter
+      - redis-exporter
     networks:
       - finsathi-network
 
-  # Grafana for dashboards
   grafana:
     image: grafana/grafana:latest
     container_name: finsathi-grafana
@@ -149,8 +178,8 @@ services:
     ports:
       - "3002:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
@@ -160,30 +189,53 @@ services:
     networks:
       - finsathi-network
 
-  # Backup service (runs daily)
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: finsathi-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-finsathi}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-finsathi}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - finsathi-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: finsathi-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - finsathi-network
+
   backup:
     image: postgres:15-alpine
     container_name: finsathi-backup
     restart: unless-stopped
     environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=${DB_USER:-finsathi}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME:-finsathi}
-      - BACKUP_SCHEDULE="0 2 * * *"
-      - BACKUP_RETENTION_DAYS=30
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-finsathi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-finsathi}
+      BACKUP_RETENTION_DAYS: 30
     volumes:
       - ./backups:/backups
     networks:
       - finsathi-network
-    command: /bin/sh -c 'while true; do pg_dump -h postgres -U ${DB_USER:-finsathi} -Fc ${DB_NAME:-finsathi} > /backups/backup_$$(date +%Y%m%d_%H%M%S).psql; find /backups -type f -mtime +$${BACKUP_RETENTION_DAYS:-30} -delete; sleep 86400; done'
+    command: /bin/sh -c 'while true; do PGPASSWORD=$${POSTGRES_PASSWORD} pg_dump -h postgres -U ${POSTGRES_USER:-finsathi} -Fc ${POSTGRES_DB:-finsathi} > /backups/backup_$$(date +%Y%m%d_%H%M%S).psql; find /backups -type f -mtime +$${BACKUP_RETENTION_DAYS:-30} -delete; sleep 86400; done'
 
 volumes:
   postgres_data:
   redis_data:
-  chroma_data:
   prometheus_data:
   grafana_data:
+  server_logs:
 
 networks:
   finsathi-network:

@@ -61,6 +61,36 @@ export const loanSimulationSchema = z.object({
     .max(360, 'Maximum tenure is 360 months (30 years)')
 });
 
+export const loanMarketplaceSimulationSchema = z.object({
+  loanAmount: z.number()
+    .positive('Loan amount must be positive')
+    .min(1000, 'Minimum loan amount is NPR 1,000')
+    .max(100000000, 'Maximum loan amount is NPR 100,000,000'),
+  tenure: z.number()
+    .int('Tenure must be in months')
+    .positive('Tenure must be positive')
+    .min(1, 'Minimum tenure is 1 month')
+    .max(600, 'Maximum tenure is 600 months (50 years)'),
+  loanType: z.string().trim().min(1, 'Loan type is required').default('HOME'),
+  ranking: z.enum(['lowest_total_cost', 'lowest_emi']).default('lowest_total_cost'),
+  limit: z.number().int().positive().max(20).default(5),
+});
+
+export const loanRecommendationsQuerySchema = z.object({
+  loanAmount: z.coerce.number()
+    .positive('Loan amount must be positive')
+    .min(1000, 'Minimum loan amount is NPR 1,000')
+    .max(100000000, 'Maximum loan amount is NPR 100,000,000'),
+  tenure: z.coerce.number()
+    .int('Tenure must be in months')
+    .positive('Tenure must be positive')
+    .min(1, 'Minimum tenure is 1 month')
+    .max(600, 'Maximum tenure is 600 months (50 years)'),
+  loanType: z.string().trim().min(1).default('HOME'),
+  ranking: z.enum(['lowest_total_cost', 'lowest_emi']).default('lowest_total_cost'),
+  limit: z.coerce.number().int().positive().max(20).default(5),
+});
+
 export const loanQuerySchema = z.object({
   page: z.coerce.number()
     .int('Page must be an integer')
@@ -84,4 +114,5 @@ export const loanIdSchema = z.object({
 export type CreateLoanInput = z.infer<typeof createLoanSchema>;
 export type UpdateLoanInput = z.infer<typeof updateLoanSchema>;
 export type LoanSimulationInput = z.infer<typeof loanSimulationSchema>;
+export type LoanMarketplaceSimulationInput = z.infer<typeof loanMarketplaceSimulationSchema>;
 export type LoanQueryInput = z.infer<typeof loanQuerySchema>;

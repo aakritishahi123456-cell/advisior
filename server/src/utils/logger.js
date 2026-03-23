@@ -1,87 +1,116 @@
-import pino from 'pino';
-import pretty from 'pino-pretty';
+import fs from 'fs'
+import path from 'path'
+import winston from 'winston'
 
-// Create logger instance
-const logger = pino(
-  {
-    level: process.env.LOG_LEVEL || 'info',
-    base: {
-      pid: process.pid,
-      hostname: process.env.HOSTNAME || 'localhost',
-      service: 'finsathi-api',
-      version: process.env.npm_package_version || '1.0.0',
+const { createLogger, format, transports } = winston
+const logDir = process.env.LOG_DIR || path.resolve(process.cwd(), 'logs')
+
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true })
+}
+
+const rootLogger = createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  defaultMeta: {
+    service: process.env.LOG_SERVICE_NAME || 'finsathi-api',
+    environment: process.env.NODE_ENV || 'development',
+  },
+  format: format.combine(format.timestamp(), format.errors({ stack: true }), format.splat(), format.json()),
+  transports: [
+    new transports.Console({
+      format:
+        process.env.NODE_ENV === 'production'
+          ? format.combine(format.timestamp(), format.json())
+          : format.combine(
+              format.colorize(),
+              format.timestamp({ format: 'HH:mm:ss' }),
+              format.printf(({ timestamp, level, message, ...meta }) => {
+                const serializedMeta = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : ''
+                return `${timestamp} ${level}: ${message}${serializedMeta}`
+              })
+            ),
+    }),
+    new transports.File({ filename: path.join(logDir, 'app.log') }),
+    new transports.File({ filename: path.join(logDir, 'error.log'), level: 'error' }),
+  ],
+})
+
+function normalizeLogArgs(args, childMeta) {
+  const [first, second, third] = args
+
+  if (typeof first === 'string') {
+    return {
+      message: first,
+      meta: {
+        ...childMeta,
+        ...(second && typeof second === 'object' ? second : {}),
+        ...(third && typeof third === 'object' ? third : {}),
+      },
+    }
+  }
+
+  if (first && typeof first === 'object' && typeof second === 'string') {
+    return {
+      message: second,
+      meta: {
+        ...childMeta,
+        ...first,
+        ...(third && typeof third === 'object' ? third : {}),
+      },
+    }
+  }
+
+  if (first instanceof Error) {
+    return {
+      message: first.message,
+      meta: {
+        ...childMeta,
+        errorName: first.name,
+        stack: first.stack,
+        ...(second && typeof second === 'object' ? second : {}),
+      },
+    }
+  }
+
+  return {
+    message: 'Log event',
+    meta: {
+      ...childMeta,
+      ...(first && typeof first === 'object' ? first : {}),
+      ...(second && typeof second === 'object' ? second : {}),
     },
-    timestamp: pino.stdTimeFunctions.isoTime,
-    formatters: {
-      log(object) {
-        return { ...object, environment: process.env.NODE_ENV || 'development' };
+  }
+}
+
+function createCompatibleLogger(childMeta = {}) {
+  const logAtLevel = (level) => (...args) => {
+    const { message, meta } = normalizeLogArgs(args, childMeta)
+    rootLogger.log(level, message, meta)
+  }
+
+  return {
+    child(meta) {
+      return createCompatibleLogger({ ...childMeta, ...meta })
+    },
+    info: logAtLevel('info'),
+    warn: logAtLevel('warn'),
+    error: logAtLevel('error'),
+    debug: logAtLevel('debug'),
+    http: logAtLevel('http'),
+    stream: {
+      write(message) {
+        rootLogger.http(message.trim(), childMeta)
       },
     },
-  },
-  process.env.NODE_ENV === 'production' 
-    ? pino.destination({ dest: 'logs/app.log', mkdir: true })
-    : pretty({
-      colorize: true,
-      translateTime: 'HH:MM:ss Z',
-      ignore: 'pid,hostname',
-    })
-);
+  }
+}
 
-// Create child loggers for different modules
-export const authLogger = logger.child({ module: 'auth' });
-export const loanLogger = logger.child({ module: 'loan' });
-export const companyLogger = logger.child({ module: 'company' });
-export const reportLogger = logger.child({ module: 'report' });
-export const subscriptionLogger = logger.child({ module: 'subscription' });
-export const dbLogger = logger.child({ module: 'database' });
+export const logger = createCompatibleLogger()
+export const authLogger = logger.child({ module: 'auth' })
+export const loanLogger = logger.child({ module: 'loan' })
+export const companyLogger = logger.child({ module: 'company' })
+export const reportLogger = logger.child({ module: 'report' })
+export const subscriptionLogger = logger.child({ module: 'subscription' })
+export const dbLogger = logger.child({ module: 'database' })
 
-// Utility functions for structured logging
-export const logRequest = (req, res, next) => {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    
-    logger.info({
-      event: 'request_completed',
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      userAgent: req.get('User-Agent'),
-      ip: req.ip || req.connection.remoteAddress,
-      userId: req.user?.id,
-    });
-  });
-  
-  next();
-};
-
-export const logError = (error, context = {}) => {
-  logger.error({
-    event: 'error_occurred',
-    error: {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
-    },
-    ...context,
-  });
-};
-
-export const logAuth = (event, userId, details = {}) => {
-  authLogger.info({
-    event,
-    userId,
-    ...details,
-  });
-};
-
-export const logBusiness = (event, details = {}) => {
-  logger.info({
-    event: 'business_event',
-    ...details,
-  });
-};
-
-export default logger;
+export default logger

@@ -59,15 +59,34 @@ export class LoanController {
   });
 
   static simulateLoan = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const simulation = await LoanService.simulateLoan(req.body);
+    const simulation = await LoanService.simulateMarketplaceLoan(req.body, req.user?.id);
     res.json({
       success: true,
       data: {
-        emi: simulation.emi,
-        totalInterest: simulation.totalInterest,
-        totalPayment: simulation.totalPayment
+        loanAmount: simulation.loanAmount,
+        tenure: simulation.tenure,
+        ranking: simulation.ranking,
+        bestLoanSuggestions: simulation.bestLoanSuggestions,
+        summary: simulation.summary,
+        savedSimulationId: simulation.savedSimulationId,
       },
       message: 'Loan simulation completed successfully'
+    });
+  });
+
+  static getLoanRecommendations = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const recommendations = await LoanService.getLoanRecommendations({
+      loanAmount: Number(req.query.loanAmount),
+      tenure: Number(req.query.tenure),
+      loanType: req.query.loanType as string | undefined,
+      ranking: req.query.ranking as 'lowest_total_cost' | 'lowest_emi' | undefined,
+      limit: req.query.limit ? Number(req.query.limit) : undefined,
+    });
+
+    res.json({
+      success: true,
+      data: recommendations,
+      message: 'Loan recommendations retrieved successfully',
     });
   });
 

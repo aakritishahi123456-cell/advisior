@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import logger from '@/utils/logger'
+import logger from '../../utils/logger'
 
 type NepseHttpConfig = {
   baseUrl: string
@@ -11,6 +11,7 @@ export class NepseHttpClient {
   private marketOpenPath: string
   private securityPath: string
   private dailyTradePath: string
+  private liveTradePath: string
 
   constructor({ baseUrl, timeoutMs }: NepseHttpConfig) {
     this.client = axios.create({
@@ -25,6 +26,7 @@ export class NepseHttpClient {
     this.marketOpenPath = process.env.NEPSE_MARKET_OPEN_PATH || '/nepse-data/market-open'
     this.securityPath = process.env.NEPSE_SECURITY_PATH || '/security'
     this.dailyTradePath = process.env.NEPSE_DAILY_TRADE_PATH || '/securityDailyTradeStat/58'
+    this.liveTradePath = process.env.NEPSE_LIVE_TRADE_PATH || this.dailyTradePath
   }
 
   async getMarketOpen(): Promise<boolean | null> {
@@ -54,6 +56,16 @@ export class NepseHttpClient {
         page: 0,
         size: 5000,
         businessDate: businessDateISO,
+      },
+    })
+    return res.data
+  }
+
+  async fetchLiveTradeRaw(): Promise<any> {
+    const res = await this.client.post(this.liveTradePath, null, {
+      params: {
+        page: 0,
+        size: 5000,
       },
     })
     return res.data
