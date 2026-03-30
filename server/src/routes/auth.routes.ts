@@ -5,6 +5,7 @@ import { JWTService } from '../utils/jwt';
 import { asyncHandler, createError } from '../middleware/errorHandler';
 import { requireAuth, AuthRequest } from '../middleware/auth.middleware';
 import { loginLimiter, registerLimiter, refreshLimiter } from '../middleware/rateLimiter.middleware';
+import { TokenBlacklistService } from '../middleware/tokenBlacklist.middleware';
 import { supabaseAdmin, supabaseAuthClient } from '../lib/supabase';
 import prisma from '../lib/prisma';
 import { productAnalyticsService, PRODUCT_EVENTS } from '../services/productAnalytics.service';
@@ -56,6 +57,17 @@ const sanitizeUser = <T extends {
   updatedAt: user.updatedAt,
 })
 
+const authUserSelect = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  role: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
+
 const syncLocalUser = async (input: {
   email: string
   firstName?: string
@@ -64,6 +76,7 @@ const syncLocalUser = async (input: {
 }) => {
   const user = await prisma.user.upsert({
     where: { email: input.email },
+    select: authUserSelect,
     update: {
       firstName: input.firstName,
       lastName: input.lastName,
@@ -107,7 +120,8 @@ router.post('/register', registerLimiter, asyncHandler(async (req: any, res: any
   }
 
   const existingUser = await prisma.user.findUnique({
-    where: { email: validatedData.email }
+    where: { email: validatedData.email },
+    select: { id: true }
   });
 
   if (existingUser) {
@@ -220,7 +234,12 @@ router.post('/refresh', refreshLimiter, asyncHandler(async (req: any, res: any) 
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      }
     });
 
     if (!user) {
@@ -286,9 +305,12 @@ router.get('/me', requireAuth, asyncHandler(async (req: AuthRequest, res: any) =
 
 // Logout endpoint (client-side token invalidation)
 router.post('/logout', requireAuth, asyncHandler(async (req: AuthRequest, res: any) => {
-  // In a stateless JWT system, we don't need to do anything server-side
-  // The client should discard the tokens
-  // In a production system, you might want to implement token blacklisting
+  const authHeader = req.header('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+
+  if (token) {
+    await TokenBlacklistService.addToBlacklist(token);
+  }
   
   res.json({
     success: true,

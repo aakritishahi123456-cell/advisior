@@ -1,10 +1,4 @@
 import { queueManager, QUEUE_NAMES } from '../queues/queueManager';
-import reportParserProcessor from './report-parser.worker';
-import aiReportProcessor from './ai-report.worker';
-import nepseCollectorProcessor from './nepse-collector.worker';
-import loanProductsScraperProcessor from './loan-products-scraper.worker';
-import fundamentalsWorkerProcessor from './fundamentals.worker';
-import portfolioRecalculationWorker from './portfolio.worker';
 import logger from '../utils/logger';
 
 export class WorkerManager {
@@ -14,59 +8,50 @@ export class WorkerManager {
     try {
       logger.info('Initializing worker manager...');
 
-      // Initialize report parsing worker
-      const reportParsingQueue = queueManager.getQueue(QUEUE_NAMES.REPORT_PARSING);
-      if (reportParsingQueue) {
-        reportParsingQueue.process(5, reportParserProcessor);
-        this.workers.set(QUEUE_NAMES.REPORT_PARSING, reportParsingQueue);
-        logger.info('Report parsing worker initialized');
-      }
-
-      // Initialize AI report worker
-      const aiReportQueue = queueManager.getQueue(QUEUE_NAMES.AI_REPORT);
-      if (aiReportQueue) {
-        aiReportQueue.process(3, aiReportProcessor);
-        this.workers.set(QUEUE_NAMES.AI_REPORT, aiReportQueue);
-        logger.info('AI report worker initialized');
-      }
-
-      // Initialize NEPSE collector worker
-      const nepseCollectorQueue = queueManager.getQueue(QUEUE_NAMES.NEPSE_COLLECTOR);
-      if (nepseCollectorQueue) {
-        nepseCollectorQueue.process(1, nepseCollectorProcessor);
-        this.workers.set(QUEUE_NAMES.NEPSE_COLLECTOR, nepseCollectorQueue);
-        logger.info('NEPSE collector worker initialized');
-      }
-
-      // Initialize loan products scraper worker
-      const loanProductsQueue = queueManager.getQueue(QUEUE_NAMES.LOAN_PRODUCTS_SCRAPER);
-      if (loanProductsQueue) {
-        loanProductsQueue.process(1, loanProductsScraperProcessor);
-        this.workers.set(QUEUE_NAMES.LOAN_PRODUCTS_SCRAPER, loanProductsQueue);
-        logger.info('Loan products scraper worker initialized');
-      }
-
-      // Initialize fundamentals pipeline worker
-      const fundamentalsQueue = queueManager.getQueue(QUEUE_NAMES.FUNDAMENTALS_SCRAPING);
-      if (fundamentalsQueue) {
-        // Keeping concurrency to 2 config mapped logic from the settings dictionary
-        fundamentalsQueue.process(2, fundamentalsWorkerProcessor);
-        this.workers.set(QUEUE_NAMES.FUNDAMENTALS_SCRAPING, fundamentalsQueue);
-        logger.info('Fundamentals scraping pipeline worker initialized');
-      }
-
-      // Initialize Quantitative Portfolio Optimization Engine
-      const portfolioQueue = queueManager.getQueue(QUEUE_NAMES.PORTFOLIO_RECALCULATION);
-      if (portfolioQueue) {
-         portfolioQueue.process(5, portfolioRecalculationWorker); // Higher concurrency for non-http mathematical bounding
-         this.workers.set(QUEUE_NAMES.PORTFOLIO_RECALCULATION, portfolioQueue);
-         logger.info('Portfolio Recalculation worker mapped successfully');
-      }
+      await this.registerWorker(QUEUE_NAMES.REPORT_PARSING, './report-parser.worker', 5, 'Report parsing');
+      await this.registerWorker(QUEUE_NAMES.AI_REPORT, './ai-report.worker', 3, 'AI report');
+      await this.registerWorker(QUEUE_NAMES.NEPSE_COLLECTOR, './nepse-collector.worker', 1, 'NEPSE collector');
+      await this.registerWorker(QUEUE_NAMES.LOAN_PRODUCTS_SCRAPER, './loan-products-scraper.worker', 1, 'Loan products scraper');
+      await this.registerWorker(QUEUE_NAMES.FUNDAMENTALS_SCRAPING, './fundamentals.worker', 2, 'Fundamentals scraping pipeline');
+      await this.registerWorker(QUEUE_NAMES.PORTFOLIO_RECALCULATION, './portfolio.worker', 5, 'Portfolio recalculation');
 
       logger.info('Worker manager initialized successfully');
     } catch (error) {
       logger.error('Failed to initialize worker manager:', error);
       throw error;
+    }
+  }
+
+  private async registerWorker(
+    queueName: string,
+    modulePath: string,
+    concurrency: number,
+    label: string
+  ): Promise<void> {
+    const queue = queueManager.getQueue(queueName);
+    if (!queue) {
+      logger.warn(`${label} worker skipped because queue ${queueName} is unavailable`);
+      return;
+    }
+
+    try {
+      const module = await import(modulePath);
+      const processor = module.default;
+
+      if (typeof processor !== 'function') {
+        logger.warn(`${label} worker skipped because ${modulePath} has no default processor export`);
+        return;
+      }
+
+      queue.process(concurrency, processor);
+      this.workers.set(queueName, queue);
+      logger.info(`${label} worker initialized`);
+    } catch (error) {
+      logger.warn(`${label} worker disabled during startup`, {
+        queueName,
+        modulePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

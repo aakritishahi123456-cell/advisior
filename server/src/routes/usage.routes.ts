@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { generalLimiter } from '../middleware/rateLimiter.middleware';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { requireAuth } from '../middleware/auth.middleware';
 import { requirePro, requireFeature, apiRateLimit, trackUsage } from '../middleware/freemium.middleware';
 import {
   getCurrentUsage,
@@ -18,7 +18,7 @@ import {
 const router = Router();
 
 // Apply authentication to all usage routes
-router.use(authenticateToken);
+router.use(requireAuth);
 
 // Apply rate limiting to API endpoints
 router.use(apiRateLimit());

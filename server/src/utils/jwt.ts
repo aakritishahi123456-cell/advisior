@@ -1,11 +1,11 @@
 import jwt from 'jsonwebtoken';
-import { User } from '@prisma/client';
 
 export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
   type: 'access' | 'refresh';
+  jti?: string;
 }
 
 export interface TokenPair {
@@ -13,11 +13,17 @@ export interface TokenPair {
   refreshToken: string;
 }
 
+type JWTUser = {
+  id: string;
+  email: string;
+  role: string;
+};
+
 export class JWTService {
   private static readonly ACCESS_TOKEN_EXPIRY = '15m';
   private static readonly REFRESH_TOKEN_EXPIRY = '7d';
 
-  static generateTokenPair(user: User): TokenPair {
+  static generateTokenPair(user: JWTUser): TokenPair {
     const payload: Omit<JWTPayload, 'type'> = {
       userId: user.id,
       email: user.email,
@@ -57,7 +63,7 @@ export class JWTService {
     }
   }
 
-  static generateAccessToken(user: User): string {
+  static generateAccessToken(user: JWTUser): string {
     const payload: Omit<JWTPayload, 'type'> = {
       userId: user.id,
       email: user.email,

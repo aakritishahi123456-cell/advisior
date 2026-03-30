@@ -13,35 +13,7 @@ import { requestLogger } from './middleware/requestLogger'
 import { connectRedis } from './config/redis'
 import { getEnvBoolean, getEnvNumber, validateEnvironment } from './config/env'
 import { initializeMonitoring, metricsMiddleware } from './config/monitoring'
-import { queueManager } from './queues/queueManager'
-import { ingestionPipeline } from './queues/ingestionPipeline'
-import { financialExtractionQueue } from './queues/financialExtractionQueue'
-import { workerManager } from './workers/workerManager'
-import { ensureNepseCollectorScheduled } from './jobs/nepse/scheduler'
-import { nepseQueue } from './queues/nepseQueue'
-import { ensureLoanProductsScraperScheduled } from './jobs/loanProducts/scheduler'
-
 import authRoutes from './routes/auth.routes'
-import loanRoutes from './routes/loan.routes'
-import financialReportRoutes from './routes/financialReport.routes'
-import usageRoutes from './routes/usage.routes'
-import reportParserRoutes from './routes/reportParser.routes'
-import portfolioRecommendRoutes from './routes/portfolio.recommend.routes'
-import portfolioRoutes from './routes/portfolio.routes'
-import marketLiveRoutes from './routes/market.live.routes'
-import interestRatesRoutes from './routes/interest-rates.routes'
-import advisorRoutes from './routes/advisor.routes'
-import officialFinancialsRoutes from './routes/officialFinancials.routes'
-import paymentRoutes from './routes/payment.routes'
-import financialIntelligenceRoutes from './routes/financial-intelligence.routes'
-import financialDataRoutes from './routes/financial-data.routes'
-import corporateActionsRoutes from './routes/corporate-actions.routes'
-import filingsRoutes from './routes/filings.routes'
-import stocksRoutes from './routes/stocks.routes'
-import subscriptionRoutes from './routes/subscription.routes'
-import referralRoutes from './routes/referral.routes'
-import analyticsRoutes from './routes/analytics.routes'
-import aiRoutes from './routes/ai.routes'
 
 dotenv.config()
 validateEnvironment()
@@ -50,6 +22,22 @@ const app = express()
 const PORT = getEnvNumber('PORT', 3001)
 const START_HTTP_SERVER = getEnvBoolean('START_HTTP_SERVER', true)
 const START_BACKGROUND_WORKERS = getEnvBoolean('START_BACKGROUND_WORKERS', true)
+
+type BackgroundRuntimeModules = {
+  financialExtractionQueue: Awaited<typeof import('./queues/financialExtractionQueue')>['financialExtractionQueue'] | null
+  ingestionPipeline: Awaited<typeof import('./queues/ingestionPipeline')>['ingestionPipeline'] | null
+  nepseQueue: Awaited<typeof import('./queues/nepseQueue')>['nepseQueue'] | null
+  queueManager: Awaited<typeof import('./queues/queueManager')>['queueManager'] | null
+  workerManager: Awaited<typeof import('./workers/workerManager')>['workerManager'] | null
+}
+
+const backgroundRuntimeModules: BackgroundRuntimeModules = {
+  financialExtractionQueue: null,
+  ingestionPipeline: null,
+  nepseQueue: null,
+  queueManager: null,
+  workerManager: null,
+}
 
 app.set('trust proxy', getEnvNumber('TRUST_PROXY', 1))
 initializeMonitoring(app)
@@ -83,9 +71,31 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/v1/queues/status', async (_req, res) => {
   try {
-    const stats = await queueManager.getAllQueueStats()
-    const ingestionStats = await ingestionPipeline.getStats()
-    const workerStatus = workerManager.getWorkerStatus()
+    if (!START_BACKGROUND_WORKERS) {
+      res.json({
+        success: true,
+        data: {
+          queues: {},
+          ingestionQueues: {},
+          workers: {},
+          enabled: false,
+          timestamp: new Date().toISOString(),
+        },
+      })
+      return
+    }
+
+    if (!backgroundRuntimeModules.queueManager || !backgroundRuntimeModules.ingestionPipeline || !backgroundRuntimeModules.workerManager) {
+      res.status(503).json({
+        success: false,
+        error: 'Background workers are not initialized',
+      })
+      return
+    }
+
+    const stats = await backgroundRuntimeModules.queueManager.getAllQueueStats()
+    const ingestionStats = await backgroundRuntimeModules.ingestionPipeline.getStats()
+    const workerStatus = backgroundRuntimeModules.workerManager.getWorkerStatus()
 
     res.json({
       success: true,
@@ -105,40 +115,50 @@ app.get('/api/v1/queues/status', async (_req, res) => {
   }
 })
 
-app.use('/api/v1/auth', authRoutes)
-app.use('/api/v1/loans', loanRoutes)
-app.use('/api/v1/loan', loanRoutes)
-app.use('/api/v1/reports', financialReportRoutes)
-app.use('/api/v1/usage', usageRoutes)
-app.use('/api/v1/reports', reportParserRoutes)
-app.use('/api/v1/portfolio', portfolioRecommendRoutes)
-app.use('/api/v1/portfolio', portfolioRoutes)
-app.use('/api/portfolio', portfolioRoutes)
-app.use('/api/v1/market', marketLiveRoutes)
-app.use('/api/market', marketLiveRoutes)
-app.use('/api/v1/interest-rates', interestRatesRoutes)
-app.use('/api/v1/advisor', advisorRoutes)
-app.use('/api/v1/official-financials', officialFinancialsRoutes)
-app.use('/api/v1/payments', paymentRoutes)
-app.use('/api/v1/payment', paymentRoutes)
-app.use('/payment', paymentRoutes)
-app.use('/api/v1/financial-intelligence', financialIntelligenceRoutes)
-app.use('/api/v1/financial-data', financialDataRoutes)
-app.use('/api/v1/corporate-actions', corporateActionsRoutes)
-app.use('/corporate-actions', corporateActionsRoutes)
-app.use('/api/v1/filings', filingsRoutes)
-app.use('/api/v1/stocks', stocksRoutes)
-app.use('/stocks', stocksRoutes)
-app.use('/api/v1/subscription', subscriptionRoutes)
-app.use('/subscription', subscriptionRoutes)
-app.use('/api/v1/referral', referralRoutes)
-app.use('/referral', referralRoutes)
-app.use('/api/v1/analytics', analyticsRoutes)
-app.use('/analytics', analyticsRoutes)
-app.use('/api/v1/ai', aiRoutes)
+function loadOptionalRoute(modulePath: string, routePath: string, options?: { useBlacklist?: boolean }) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const routeModule = require(modulePath)
+    const router = routeModule.default ?? routeModule
 
-app.use('/loans', loanRoutes)
-app.use('/loan', loanRoutes)
+    if (options?.useBlacklist) {
+      app.use(routePath, checkTokenBlacklist, router)
+    } else {
+      app.use(routePath, router)
+    }
+  } catch (error) {
+    logger.warn('Optional route disabled during startup', {
+      routePath,
+      modulePath,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+app.use('/api/v1/auth', authRoutes)
+loadOptionalRoute('./routes/loan.routes', '/api/v1/loans')
+loadOptionalRoute('./routes/loan.routes', '/api/v1/loan')
+loadOptionalRoute('./routes/financialReport.routes', '/api/v1/reports')
+loadOptionalRoute('./routes/usage.routes', '/api/v1/usage')
+loadOptionalRoute('./routes/portfolio.recommend.routes', '/api/v1/portfolio')
+loadOptionalRoute('./routes/portfolio.routes', '/api/v1/portfolio')
+loadOptionalRoute('./routes/portfolio.routes', '/api/portfolio', { useBlacklist: true })
+loadOptionalRoute('./routes/market.live.routes', '/api/v1/market')
+loadOptionalRoute('./routes/interest-rates.routes', '/api/v1/interest-rates')
+loadOptionalRoute('./routes/advisor.routes', '/api/v1/advisor')
+loadOptionalRoute('./routes/officialFinancials.routes', '/api/v1/official-financials')
+loadOptionalRoute('./routes/payment.routes', '/api/v1/payments')
+loadOptionalRoute('./routes/payment.routes', '/api/v1/payment')
+loadOptionalRoute('./routes/financial-intelligence.routes', '/api/v1/financial-intelligence')
+loadOptionalRoute('./routes/financial-data.routes', '/api/v1/financial-data')
+loadOptionalRoute('./routes/corporate-actions.routes', '/api/v1/corporate-actions')
+loadOptionalRoute('./routes/filings.routes', '/api/v1/filings')
+loadOptionalRoute('./routes/stocks.routes', '/api/v1/stocks')
+loadOptionalRoute('./routes/subscription.routes', '/api/v1/subscription')
+loadOptionalRoute('./routes/referral.routes', '/api/v1/referral')
+loadOptionalRoute('./routes/analytics.routes', '/api/v1/analytics')
+loadOptionalRoute('./routes/ai.routes', '/api/v1/ai')
+loadOptionalRoute('./routes/reportParser.routes', '/api/v1/report-parser')
 
 app.use(errorHandler)
 
@@ -151,15 +171,35 @@ app.use('*', (_req, res) => {
 
 async function startServer() {
   try {
-    await connectRedis()
     if (START_BACKGROUND_WORKERS) {
-      await queueManager.initialize()
-      await ingestionPipeline.initialize()
-      await financialExtractionQueue.schedule()
-      await workerManager.initialize()
-      await ensureNepseCollectorScheduled()
-      await nepseQueue.scheduleRecurringFetch()
-      await ensureLoanProductsScraperScheduled()
+      await connectRedis()
+      const [queueManagerModule, ingestionPipelineModule, financialExtractionQueueModule, workerManagerModule, nepseQueueModule, nepseSchedulerModule, loanProductsSchedulerModule] = await Promise.all([
+        import('./queues/queueManager'),
+        import('./queues/ingestionPipeline'),
+        import('./queues/financialExtractionQueue'),
+        import('./workers/workerManager'),
+        import('./queues/nepseQueue'),
+        import('./jobs/nepse/scheduler'),
+        import('./jobs/loanProducts/scheduler'),
+      ])
+
+      backgroundRuntimeModules.queueManager = queueManagerModule.queueManager
+      backgroundRuntimeModules.ingestionPipeline = ingestionPipelineModule.ingestionPipeline
+      backgroundRuntimeModules.financialExtractionQueue = financialExtractionQueueModule.financialExtractionQueue
+      backgroundRuntimeModules.workerManager = workerManagerModule.workerManager
+      backgroundRuntimeModules.nepseQueue = nepseQueueModule.nepseQueue
+
+      await backgroundRuntimeModules.queueManager.initialize()
+      await backgroundRuntimeModules.ingestionPipeline.initialize()
+      await backgroundRuntimeModules.financialExtractionQueue.schedule()
+      await backgroundRuntimeModules.workerManager.initialize()
+      await nepseSchedulerModule.ensureNepseCollectorScheduled()
+      await backgroundRuntimeModules.nepseQueue.scheduleRecurringFetch()
+      await loanProductsSchedulerModule.ensureLoanProductsScraperScheduled()
+    } else {
+      logger.info('Starting API without Redis-backed background workers', {
+        workersEnabled: false,
+      })
     }
 
     if (START_HTTP_SERVER) {
@@ -185,11 +225,21 @@ async function startServer() {
 process.on('SIGINT', async () => {
   logger.warn('SIGINT received. Shutting down server...')
   if (START_BACKGROUND_WORKERS) {
-    await nepseQueue.shutdown()
-    await financialExtractionQueue.shutdown()
-    await ingestionPipeline.shutdown()
-    await queueManager.shutdown()
-    await workerManager.shutdown()
+    if (backgroundRuntimeModules.nepseQueue) {
+      await backgroundRuntimeModules.nepseQueue.shutdown()
+    }
+    if (backgroundRuntimeModules.financialExtractionQueue) {
+      await backgroundRuntimeModules.financialExtractionQueue.shutdown()
+    }
+    if (backgroundRuntimeModules.ingestionPipeline) {
+      await backgroundRuntimeModules.ingestionPipeline.shutdown()
+    }
+    if (backgroundRuntimeModules.queueManager) {
+      await backgroundRuntimeModules.queueManager.shutdown()
+    }
+    if (backgroundRuntimeModules.workerManager) {
+      await backgroundRuntimeModules.workerManager.shutdown()
+    }
   }
   process.exit(0)
 })
@@ -197,11 +247,21 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   logger.warn('SIGTERM received. Shutting down server...')
   if (START_BACKGROUND_WORKERS) {
-    await nepseQueue.shutdown()
-    await financialExtractionQueue.shutdown()
-    await ingestionPipeline.shutdown()
-    await queueManager.shutdown()
-    await workerManager.shutdown()
+    if (backgroundRuntimeModules.nepseQueue) {
+      await backgroundRuntimeModules.nepseQueue.shutdown()
+    }
+    if (backgroundRuntimeModules.financialExtractionQueue) {
+      await backgroundRuntimeModules.financialExtractionQueue.shutdown()
+    }
+    if (backgroundRuntimeModules.ingestionPipeline) {
+      await backgroundRuntimeModules.ingestionPipeline.shutdown()
+    }
+    if (backgroundRuntimeModules.queueManager) {
+      await backgroundRuntimeModules.queueManager.shutdown()
+    }
+    if (backgroundRuntimeModules.workerManager) {
+      await backgroundRuntimeModules.workerManager.shutdown()
+    }
   }
   process.exit(0)
 })

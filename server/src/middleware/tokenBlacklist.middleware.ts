@@ -31,8 +31,8 @@ export class TokenBlacklistService {
       
       return result === '1';
     } catch (error) {
-      // If token is invalid/expired, consider it blacklisted
-      return true;
+      // Invalid or expired tokens are handled by auth middleware, not blacklist checks.
+      return false;
     }
   }
 

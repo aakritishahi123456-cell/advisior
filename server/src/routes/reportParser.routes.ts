@@ -44,6 +44,12 @@ router.get('/job/:jobId',
   ReportParserController.getJobStatus
 );
 
+// GET /api/v1/reports/statistics - Get parsing statistics (admin only)
+router.get('/statistics',
+  proLimiter,
+  ReportParserController.getParsingStatistics
+);
+
 // GET /api/v1/reports/:symbol/history - Get parsing history for a company
 router.get('/:symbol/history',
   validateRequest({ 
@@ -81,12 +87,6 @@ router.delete('/:symbol/:year',
 router.put('/:symbol/:year',
   proLimiter,
   ReportParserController.updateFinancialReport
-);
-
-// GET /api/v1/reports/statistics - Get parsing statistics (admin only)
-router.get('/statistics',
-  proLimiter,
-  ReportParserController.getParsingStatistics
 );
 
 export default router;

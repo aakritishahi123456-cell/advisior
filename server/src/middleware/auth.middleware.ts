@@ -210,3 +210,5 @@ export const optionalAuth = async (
     next();
   }
 };
+
+export const authenticateToken = requireAuth;

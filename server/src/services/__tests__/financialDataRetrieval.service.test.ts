@@ -52,6 +52,7 @@ describe('FinancialDataRetrievalService', () => {
         latest_price: 560,
         PE_ratio: 18.4,
       },
+      sources: ['financials_latest', 'nepse_price_data'],
     })
   })
 
@@ -78,6 +79,7 @@ describe('FinancialDataRetrievalService', () => {
         latest_price: null,
         PE_ratio: null,
       },
+      sources: [],
     })
   })
 })
